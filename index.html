@@ -1,55 +1,74 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-page="login">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login page</title>
-    <!-- <link href="./media/logos/favicon.png" rel="icon" type="image/png" /> -->
-  
-    <link href="./scripts/css/index.css" rel="stylesheet" type="text/css" />
-    <link href="https://fonts.googleapis.com/css2?family=Montserrat&display=swap" rel="stylesheet">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Sign in to GrepMany, a focused workspace for searching, organizing, and registering course data.">
+  <meta name="theme-color" content="#f7f4ed">
+  <title>GrepMany | Login</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+  <link href="./assets/css/app.css" rel="stylesheet">
 </head>
-
 <body>
-  <div class="wrapper">
+  <a class="skip-link" href="#login-form">Skip to login</a>
+  <main class="auth-shell">
+    <section class="auth-visual" aria-labelledby="brand-title">
+      <a class="brand-mark" href="./src/grepMny.html" aria-label="GrepMany home">
+        <span>GM</span>
+        <strong>GrepMany</strong>
+      </a>
+      <div class="auth-copy">
+        <p class="eyebrow">Search smarter</p>
+        <h1 id="brand-title">A modern workspace for finding, storing, and managing useful records.</h1>
+        <p>Keep student course data organized, validate submissions before they reach the database, and move through the workflow with a clean, responsive interface.</p>
+      </div>
+      <div class="terminal-card" aria-label="GrepMany example command">
+        <div class="terminal-top"><span></span><span></span><span></span><p>grepMany.sh</p></div>
+        <pre><code>$ grep -i "course" registry.csv
+> 48 matches ready for review</code></pre>
+      </div>
+    </section>
 
-    <div class="login-box">
-      
-      <form action="./scripts/php/login.php" method="post"> <!--./scripts/php/login.php -->
-        <h2>Login</h2>
-  
-        <div class="input-box">
-          <span class="icon">
-            <ion-icon name="mail"></ion-icon>
-          </span>
-          <input type="email" name="email" required>
-          <label>Email</label>
+    <section class="auth-panel" aria-labelledby="login-title">
+      <div class="mode-row">
+        <span>Welcome back</span>
+        <button class="theme-toggle" type="button" aria-label="Toggle dark mode" data-theme-toggle></button>
+      </div>
+      <form id="login-form" class="form-card" action="./scripts/php/login.php" method="post" novalidate data-validate>
+        <div class="form-heading">
+          <p class="eyebrow">Secure access</p>
+          <h2 id="login-title">Log in to GrepMany</h2>
+          <p>Use your registered email and password to continue.</p>
         </div>
-  
-        <div class="input-box">
-          <span class="icon">
-            <ion-icon name="lock-closed"></ion-icon>
-          </span>
-          <input type="password" name="password" required>
-          <label>Password</label>
+
+        <div class="alert" role="status" aria-live="polite" data-alert></div>
+
+        <label class="field">
+          <span>Email address</span>
+          <input type="email" name="email" autocomplete="email" placeholder="you@example.com" required>
+          <small></small>
+        </label>
+
+        <label class="field">
+          <span>Password</span>
+          <input type="password" name="password" autocomplete="current-password" minlength="6" placeholder="Enter password" required>
+          <small></small>
+        </label>
+
+        <div class="split-row">
+          <label class="check-field">
+            <input type="checkbox" name="remember">
+            <span>Remember me</span>
+          </label>
+          <a href="./src/signup.html">Create account</a>
         </div>
-  
-        <div class="remember-forgot">
-          <label><input type="checkbox"> Remember me</label>
-          <a href="./src/forgotpass.html">Forgot Password?</a>
-        </div>
-  
-        <button type="submit">Login</button>
-  
-        <div class="register-link">
-          <p>Don't have an account? <a href="./src/signup.html">Register</a></p>
-        </div>
+
+        <button class="btn btn-primary" type="submit">Login</button>
       </form>
-    </div>
-  
-  </div>
-      
-  <!-- <script type="text/javascript" src="./scripts/js/index.js"></script> -->
-
+    </section>
+  </main>
+  <script src="./assets/js/app.js" defer></script>
 </body>
 </html>

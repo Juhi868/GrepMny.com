@@ -1,50 +1,51 @@
 <?php
+declare(strict_types=1);
+
 session_start();
+require_once __DIR__ . '/config.php';
 
-// Database connection parameters
-$servername = "localhost";
-$username = "root"; // Your MySQL username
-$password = ""; // Your MySQL password
-$database = "grepMny"; // Your database name
+require_post();
 
-// Create connection
-$conn = new mysqli($servername, $username, $password, $database);
+$email = filter_input(INPUT_POST, 'email', FILTER_VALIDATE_EMAIL);
+$password = (string) ($_POST['password'] ?? '');
 
-// Check connection
-if ($conn->connect_error) {
-    die("Connection failed: " . $conn->connect_error);
+if (!$email || $password === '') {
+    redirect_with_status(APP_LOGIN, 'error', 'Enter a valid email and password.');
 }
 
-// Check if form is submitted
-if ($_SERVER["REQUEST_METHOD"] == "POST") {
-    // Check if email and password are provided
-    if(isset($_POST['email']) && isset($_POST['password'])) {
-        // Sanitize inputs to prevent SQL injection
-        $email = $conn->real_escape_string($_POST['email']);
-        $password = $conn->real_escape_string($_POST['password']);
-        $_SESSION["username"]= $email;
-        // Perform SQL query to check credentials
-        $sql = "SELECT * FROM login WHERE email='$email' AND passwd='$password'";
-        $result = $conn->query($sql);
+try {
+    $conn = db();
+    $stmt = $conn->prepare('SELECT email, passwd, userid FROM login WHERE email = ? LIMIT 1');
+    $stmt->bind_param('s', $email);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $user = $result->fetch_assoc();
 
-        if ($result->num_rows > 0 && $email != 'admin@grepMny.com') {
-            // Redirect to another page on successful login
-            header("Location: ../../src/grepMny.html");
-            exit();
-        }elseif($email=='admin@grepMny.com' && $password=='111'){
-            header("Location: http://localhost/phpmyadmin/index.php?route=/sql&db=test&table=login&pos=0");
-            exit();
-        }
-        else 
-        {
-            // If login fails, you can display an error message or perform other actions
-            echo "Invalid email or password. Please try again.";
-        }
-    } else {
-        echo "Email and password are required.";
+    if (!$user) {
+        redirect_with_status(APP_LOGIN, 'error', 'Invalid email or password.');
     }
-}
 
-// Close connection
-$conn->close();
-?>
+    $storedPassword = (string) $user['passwd'];
+    $isHashed = password_get_info($storedPassword)['algo'] !== 0;
+    $isValid = $isHashed ? password_verify($password, $storedPassword) : hash_equals($storedPassword, $password);
+
+    if (!$isValid) {
+        redirect_with_status(APP_LOGIN, 'error', 'Invalid email or password.');
+    }
+
+    if (!$isHashed) {
+        $newHash = password_hash($password, PASSWORD_DEFAULT);
+        $update = $conn->prepare('UPDATE login SET passwd = ? WHERE email = ?');
+        $update->bind_param('ss', $newHash, $email);
+        $update->execute();
+    }
+
+    session_regenerate_id(true);
+    $_SESSION['username'] = $email;
+    $_SESSION['userid'] = $user['userid'];
+
+    redirect_with_status(APP_HOME, 'success', 'Logged in successfully.');
+} catch (mysqli_sql_exception $error) {
+    error_log($error->getMessage());
+    redirect_with_status(APP_LOGIN, 'error', 'Unable to connect right now. Please try again.');
+}

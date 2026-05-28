@@ -1,69 +1,79 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-page="signup">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login page</title>
-    <!-- <link href="./media/logos/favicon.png" rel="icon" type="image/png" /> -->
-  
-    <link href="../scripts/css/index.css" rel="stylesheet" type="text/css" />
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Create a GrepMany account for the registry and search workspace.">
+  <meta name="theme-color" content="#f7f4ed">
+  <title>GrepMany | Create Account</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+  <link href="../assets/css/app.css" rel="stylesheet">
 </head>
-
 <body>
-    <div class="wrapper">
-
-        <div class="login-box">
-          <form action="../scripts/php/signin.php" method="post">
-            <h2>Sign In</h2>
-      
-            <div class="input-box">
-              <span class="icon">
-                <ion-icon name="mail"></ion-icon>
-              </span>
-              <input type="email" name="email" required>
-              <label>Email</label>
-            </div>
-
-            <div class="input-box">
-                <span class="icon">
-                  <ion-icon name="lock-closed"></ion-icon>
-                </span>
-                <input type="text" name="userid" required>
-                <label>User id</label>
-              </div>
-              
-            <div class="input-box">
-                <span class="icon">
-                  <ion-icon name="lock-closed"></ion-icon>
-                </span>
-                <input type="password" name="password1" required>
-                <label>Password</label>
-              </div>
-
-            <div class="input-box">
-                <span class="icon">
-                  <ion-icon name="lock-closed"></ion-icon>
-                </span>
-                <input type="password" name="password2" required>
-                <label>Repeat Password</label>
-              </div>
-      
-            <!-- <div class="remember-forgot">
-              <label><input type="checkbox"> Remember me</label>
-              <a href="#">Forgot Password?</a>
-            </div> -->
-      
-            <button type="submit">Sign in</button>
-      
-            <!-- <div class="register-link">
-              <p>Don't have an account? <a href="#">Register</a></p>
-            </div> -->
-          </form>
-        </div>
-      
+  <a class="skip-link" href="#signup-form">Skip to account form</a>
+  <main class="auth-shell">
+    <section class="auth-visual" aria-labelledby="signup-brand-title">
+      <a class="brand-mark" href="./grepMny.html" aria-label="GrepMany home">
+        <span>GM</span>
+        <strong>GrepMany</strong>
+      </a>
+      <div class="auth-copy">
+        <p class="eyebrow">Join the workspace</p>
+        <h1 id="signup-brand-title">Create an account that keeps registry work fast, tidy, and searchable.</h1>
+        <p>New accounts use hashed passwords and basic validation before data is sent to the server.</p>
       </div>
-      
-  <!-- <script type="text/javascript" src="/scripts/js/index.js"></script> -->
+      <div class="feature-stack" aria-label="Account benefits">
+        <div><strong>Validated forms</strong><span>Cleaner records from the first submit.</span></div>
+        <div><strong>Responsive access</strong><span>Use the workflow from phone, tablet, or desktop.</span></div>
+        <div><strong>Theme memory</strong><span>Your light or dark preference follows you.</span></div>
+      </div>
+    </section>
 
+    <section class="auth-panel" aria-labelledby="signup-title">
+      <div class="mode-row">
+        <span>New account</span>
+        <button class="theme-toggle" type="button" aria-label="Toggle dark mode" data-theme-toggle></button>
+      </div>
+      <form id="signup-form" class="form-card" action="../scripts/php/signin.php" method="post" novalidate data-validate data-password-match>
+        <div class="form-heading">
+          <p class="eyebrow">Get started</p>
+          <h2 id="signup-title">Create your account</h2>
+          <p>Use a unique user ID and a password with at least 6 characters.</p>
+        </div>
+
+        <div class="alert" role="status" aria-live="polite" data-alert></div>
+
+        <label class="field">
+          <span>Email address</span>
+          <input type="email" name="email" autocomplete="email" placeholder="you@example.com" maxlength="80" required>
+          <small></small>
+        </label>
+
+        <label class="field">
+          <span>User ID</span>
+          <input type="text" name="userid" autocomplete="username" placeholder="ritvik_01" minlength="3" maxlength="32" pattern="[A-Za-z0-9_\\-]+" required>
+          <small>Letters, numbers, underscores, and hyphens only.</small>
+        </label>
+
+        <label class="field">
+          <span>Password</span>
+          <input type="password" name="password1" autocomplete="new-password" placeholder="Create password" minlength="6" required>
+          <small></small>
+        </label>
+
+        <label class="field">
+          <span>Confirm password</span>
+          <input type="password" name="password2" autocomplete="new-password" placeholder="Repeat password" minlength="6" required>
+          <small></small>
+        </label>
+
+        <button class="btn btn-primary" type="submit">Register</button>
+        <p class="form-footer">Already have an account? <a href="../index.html">Log in</a></p>
+      </form>
+    </section>
+  </main>
+  <script src="../assets/js/app.js" defer></script>
 </body>
 </html>

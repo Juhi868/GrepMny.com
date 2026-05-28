@@ -1,68 +1,45 @@
 <?php
-// Database connection parameters
-$servername = "localhost";
-$username = "root"; // Your MySQL username
-$password = ""; // Your MySQL password
-$database = "grepMny"; // Your database name
+declare(strict_types=1);
 
-// Create connection
-$conn = new mysqli($servername, $username, $password, $database);
+require_once __DIR__ . '/config.php';
 
-// Check connection
-if ($conn->connect_error) {
-    die("Connection failed: " . $conn->connect_error);
+require_post();
+
+$email = filter_input(INPUT_POST, 'email', FILTER_VALIDATE_EMAIL);
+$userid = clean_string((string) ($_POST['userid'] ?? ''), 32);
+$password1 = (string) ($_POST['password1'] ?? '');
+$password2 = (string) ($_POST['password2'] ?? '');
+$signupPage = '../../src/signup.html';
+
+if (!$email) {
+    redirect_with_status($signupPage, 'error', 'Enter a valid email address.');
 }
 
-// Check if form is submitted
-if ($_SERVER["REQUEST_METHOD"] == "POST") {
-    // Check if email and passwords are provided
-    if (isset($_POST['email']) && isset($_POST['password1']) && isset($_POST['password2']) && isset($_POST['userid'])) {
-        // Sanitize inputs to prevent SQL injection
-        $email = $conn->real_escape_string($_POST['email']);
-        $password1 = $conn->real_escape_string($_POST['password1']);
-        $password2 = $conn->real_escape_string($_POST['password2']);
-        $userid = $conn->real_escape_string($_POST['userid']);
-        
+if (!preg_match('/^[A-Za-z0-9_-]{3,32}$/', $userid)) {
+    redirect_with_status($signupPage, 'error', 'User ID can use letters, numbers, underscores, and hyphens.');
+}
 
-        // Check if email is not null
-        if (!empty($email)) {
-            // Check if passwords match
-            if ($password1 == $password2) {
-                // SQL query to insert data
-                $sql = "INSERT INTO `login` (`email`, `passwd`,`userid`) VALUES ('$email', '$password2','$userid');";
-                $sqluser ="SELECT  userid from login where userid = '$userid'";
-                $temp =$conn->query($sqluser);
+if (strlen($password1) < 6 || $password1 !== $password2) {
+    redirect_with_status($signupPage, 'error', 'Passwords must match and contain at least 6 characters.');
+}
 
-                 
-                // Execute SQL query
-                if($temp->num_rows == 0){
+try {
+    $conn = db();
+    $exists = $conn->prepare('SELECT 1 FROM login WHERE email = ? OR userid = ? LIMIT 1');
+    $exists->bind_param('ss', $email, $userid);
+    $exists->execute();
 
-                if ($conn->query($sql) === TRUE) {
-                    // Redirect to another page on successful registration
-                    echo "Registered Successfully";
-                    header("Location: ../../index.html");
-                    exit; // Terminate script after redirection
-                } else {
-                    echo "Error: " . $sql . "<br>" . $conn->error;
-                }
-
-            }
-            else{
-                echo "Try another user id ";
-            }
-            } else {
-                echo "Passwords do not match";
-            }
-
-        
-        } else {
-            echo "Email cannot be empty";
-        }
-    } else {
-        echo "Email and passwords are required.";
+    if ($exists->get_result()->num_rows > 0) {
+        redirect_with_status($signupPage, 'error', 'Email or user ID already exists.');
     }
-}
 
-// Close connection
-$conn->close();
-?>
+    $hash = password_hash($password1, PASSWORD_DEFAULT);
+    $insert = $conn->prepare('INSERT INTO login (email, passwd, userid) VALUES (?, ?, ?)');
+    $insert->bind_param('sss', $email, $hash, $userid);
+    $insert->execute();
+
+    redirect_with_status(APP_LOGIN, 'success', 'Account created. You can log in now.');
+} catch (mysqli_sql_exception $error) {
+    error_log($error->getMessage());
+    redirect_with_status($signupPage, 'error', 'Unable to create the account right now.');
+}
