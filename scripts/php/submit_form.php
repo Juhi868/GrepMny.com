@@ -3,9 +3,9 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/config.php';
 
-require_post();
-
 $registryPage = '../../src/data.html';
+require_post($registryPage);
+
 $sname = clean_string((string) ($_POST['sname'] ?? ''), 40);
 $semail = filter_input(INPUT_POST, 'semail', FILTER_VALIDATE_EMAIL);
 $cid = filter_input(INPUT_POST, 'cid', FILTER_VALIDATE_INT, [

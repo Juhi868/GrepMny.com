@@ -9,71 +9,219 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
-  <link href="../assets/css/app.css" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background: #181818;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 2rem;
+    }
+
+    .auth-card {
+      background: #ffffff;
+      border: 1px solid #e8e4db;
+      border-radius: 14px;
+      padding: 2.25rem 2.5rem;
+      width: 100%;
+      max-width: 420px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      justify-content: center;
+      margin-bottom: 1.75rem;
+      text-decoration: none;
+    }
+
+    .brand-icon {
+      width: 36px;
+      height: 36px;
+      border-radius: 8px;
+      background: #1a1a1a;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 13px;
+      font-weight: 700;
+      color: #fff;
+      font-family: 'JetBrains Mono', monospace;
+      letter-spacing: -0.5px;
+    }
+
+    .brand-name {
+      font-size: 17px;
+      font-weight: 600;
+      color: #1a1a1a;
+    }
+
+    .form-heading {
+      text-align: center;
+      margin-bottom: 1.5rem;
+    }
+
+    .eyebrow {
+      font-size: 12px;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #999;
+      margin-bottom: 4px;
+    }
+
+    .form-heading h2 {
+      font-size: 20px;
+      font-weight: 600;
+      color: #1a1a1a;
+      margin-bottom: 6px;
+    }
+
+    .form-heading p {
+      font-size: 13px;
+      color: #777;
+      line-height: 1.5;
+    }
+
+    .alert {
+      display: none;
+      font-size: 13px;
+      padding: 10px 12px;
+      border-radius: 8px;
+      margin-bottom: 1rem;
+      background: #fef2f2;
+      color: #b91c1c;
+      border: 1px solid #fecaca;
+    }
+
+    .alert:not(:empty) { display: block; }
+
+    label.field {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+      margin-bottom: 14px;
+    }
+
+    label.field span {
+      font-size: 13px;
+      font-weight: 500;
+      color: #1a1a1a;
+    }
+
+    label.field input {
+      height: 38px;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      padding: 0 10px;
+      font-size: 14px;
+      font-family: 'Inter', sans-serif;
+      color: #1a1a1a;
+      background: #fff;
+      outline: none;
+      transition: border-color 0.15s, box-shadow 0.15s;
+    }
+
+    label.field input:focus {
+      border-color: #999;
+      box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.06);
+    }
+
+    label.field input::placeholder { color: #bbb; }
+
+    label.field small {
+      font-size: 12px;
+      color: #aaa;
+    }
+
+    .btn-primary {
+      width: 100%;
+      height: 40px;
+      background: #1a1a1a;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 500;
+      font-family: 'Inter', sans-serif;
+      cursor: pointer;
+      margin-top: 6px;
+      transition: opacity 0.15s;
+    }
+
+    .btn-primary:hover { opacity: 0.85; }
+    .btn-primary:active { transform: scale(0.99); }
+
+    .form-footer {
+      text-align: center;
+      margin-top: 1rem;
+      font-size: 13px;
+      color: #777;
+    }
+
+    .form-footer a {
+      color: #1a1a1a;
+      font-weight: 500;
+      text-decoration: none;
+      border-bottom: 1px solid #ddd;
+    }
+
+    .form-footer a:hover { border-color: #1a1a1a; }
+  </style>
 </head>
 <body>
-  <a class="skip-link" href="#signup-form">Skip to account form</a>
-  <main class="auth-shell">
-    <section class="auth-visual" aria-labelledby="signup-brand-title">
-      <a class="brand-mark" href="./grepMny.html" aria-label="GrepMany home">
-        <span>GM</span>
-        <strong>GrepMany</strong>
-      </a>
-      <div class="auth-copy">
-        <p class="eyebrow">Join the workspace</p>
-        <h1 id="signup-brand-title">Create an account that keeps registry work fast, tidy, and searchable.</h1>
-        <p>New accounts use hashed passwords and basic validation before data is sent to the server.</p>
+  <a class="skip-link" href="#signup-form" style="position:absolute;left:-9999px">Skip to account form</a>
+
+  <main class="auth-card">
+    <a class="brand" href="./grepMny.html" aria-label="GrepMany home">
+      <div class="brand-icon">GM</div>
+      <span class="brand-name">GrepMany</span>
+    </a>
+
+    <form id="signup-form" action="../scripts/php/signin.php" method="post" novalidate data-validate data-password-match>
+      <div class="form-heading">
+        <p class="eyebrow">Get started</p>
+        <h2>Create your account</h2>
+        <p>Use a unique user ID and a password with at least 6 characters.</p>
       </div>
-      <div class="feature-stack" aria-label="Account benefits">
-        <div><strong>Validated forms</strong><span>Cleaner records from the first submit.</span></div>
-        <div><strong>Responsive access</strong><span>Use the workflow from phone, tablet, or desktop.</span></div>
-        <div><strong>Theme memory</strong><span>Your light or dark preference follows you.</span></div>
-      </div>
-    </section>
 
-    <section class="auth-panel" aria-labelledby="signup-title">
-      <div class="mode-row">
-        <span>New account</span>
-        <button class="theme-toggle" type="button" aria-label="Toggle dark mode" data-theme-toggle></button>
-      </div>
-      <form id="signup-form" class="form-card" action="../scripts/php/signin.php" method="post" novalidate data-validate data-password-match>
-        <div class="form-heading">
-          <p class="eyebrow">Get started</p>
-          <h2 id="signup-title">Create your account</h2>
-          <p>Use a unique user ID and a password with at least 6 characters.</p>
-        </div>
+      <div class="alert" role="status" aria-live="polite" data-alert></div>
 
-        <div class="alert" role="status" aria-live="polite" data-alert></div>
+      <label class="field">
+        <span>Email address</span>
+        <input type="email" name="email" autocomplete="email" placeholder="you@example.com" maxlength="80" required>
+        <small></small>
+      </label>
 
-        <label class="field">
-          <span>Email address</span>
-          <input type="email" name="email" autocomplete="email" placeholder="you@example.com" maxlength="80" required>
-          <small></small>
-        </label>
+      <label class="field">
+        <span>User ID</span>
+        <input type="text" name="userid" autocomplete="username" placeholder="ritvik_01" minlength="3" maxlength="32" pattern="[A-Za-z0-9_\-]+" required>
+        <small>Letters, numbers, underscores, and hyphens only.</small>
+      </label>
 
-        <label class="field">
-          <span>User ID</span>
-          <input type="text" name="userid" autocomplete="username" placeholder="ritvik_01" minlength="3" maxlength="32" pattern="[A-Za-z0-9_\\-]+" required>
-          <small>Letters, numbers, underscores, and hyphens only.</small>
-        </label>
+      <label class="field">
+        <span>Password</span>
+        <input type="password" name="password1" autocomplete="new-password" placeholder="Create password" minlength="6" required>
+        <small></small>
+      </label>
 
-        <label class="field">
-          <span>Password</span>
-          <input type="password" name="password1" autocomplete="new-password" placeholder="Create password" minlength="6" required>
-          <small></small>
-        </label>
+      <label class="field">
+        <span>Confirm password</span>
+        <input type="password" name="password2" autocomplete="new-password" placeholder="Repeat password" minlength="6" required>
+        <small></small>
+      </label>
 
-        <label class="field">
-          <span>Confirm password</span>
-          <input type="password" name="password2" autocomplete="new-password" placeholder="Repeat password" minlength="6" required>
-          <small></small>
-        </label>
+      <button class="btn-primary" type="submit">Register</button>
 
-        <button class="btn btn-primary" type="submit">Register</button>
-        <p class="form-footer">Already have an account? <a href="../index.html">Log in</a></p>
-      </form>
-    </section>
+      <p class="form-footer">Already have an account? <a href="../index.html">Log in</a></p>
+    </form>
   </main>
+
   <script src="../assets/js/app.js" defer></script>
 </body>
 </html>

@@ -35,10 +35,9 @@ function redirect_with_status(string $location, string $status, string $message)
     exit;
 }
 
-function require_post(): void
+function require_post(string $fallbackLocation): void
 {
     if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-        http_response_code(405);
-        exit('Method not allowed.');
+        redirect_with_status($fallbackLocation, 'error', 'Please submit the form from the website page.');
     }
 }

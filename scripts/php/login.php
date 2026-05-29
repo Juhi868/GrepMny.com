@@ -4,7 +4,7 @@ declare(strict_types=1);
 session_start();
 require_once __DIR__ . '/config.php';
 
-require_post();
+require_post(APP_LOGIN);
 
 $email = filter_input(INPUT_POST, 'email', FILTER_VALIDATE_EMAIL);
 $password = (string) ($_POST['password'] ?? '');

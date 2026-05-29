@@ -3,13 +3,13 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/config.php';
 
-require_post();
+$signupPage = '../../src/signup.html';
+require_post($signupPage);
 
 $email = filter_input(INPUT_POST, 'email', FILTER_VALIDATE_EMAIL);
 $userid = clean_string((string) ($_POST['userid'] ?? ''), 32);
 $password1 = (string) ($_POST['password1'] ?? '');
 $password2 = (string) ($_POST['password2'] ?? '');
-$signupPage = '../../src/signup.html';
 
 if (!$email) {
     redirect_with_status($signupPage, 'error', 'Enter a valid email address.');
