@@ -11,7 +11,7 @@ function db(): mysqli
     $host = getenv('GREPMANY_DB_HOST') ?: '127.0.0.1';
     $user = getenv('GREPMANY_DB_USER') ?: 'root';
     $pass = getenv('GREPMANY_DB_PASS') ?: '';
-    $name = getenv('GREPMANY_DB_NAME') ?: 'grepMny';
+    $name = getenv('GREPMANY_DB_NAME') ?: 'grepmny';
     $port = (int) (getenv('GREPMANY_DB_PORT') ?: 3307);
 
     $connection = new mysqli($host, $user, $pass, $name, $port);
