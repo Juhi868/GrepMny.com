@@ -24,9 +24,16 @@
         <h1 id="brand-title">A modern workspace for finding, storing, and managing useful records.</h1>
         <p>Keep student course data organized, validate submissions before they reach the database, and move through the workflow with a clean, responsive interface.</p>
       </div>
-      <div class="terminal-card" aria-label="GrepMany example command">
-      
-      
+      <div class="terminal-card" aria-label="Quick Demo Roles" style="margin-top:1.5rem; padding:1.25rem; background:rgba(0,0,0,0.6); border:1px solid rgba(255,255,255,0.18); border-radius:var(--radius); box-shadow:var(--shadow);">
+        <p class="eyebrow" style="color:var(--primary); margin-bottom:0.5rem; font-weight:800;">Quick Demo Roles</p>
+        <p style="font-size:0.88rem; margin:0 0 1rem 0; color:rgba(255,255,255,0.72); line-height:1.4;">Click any role below to pre-populate the login form credentials and sign in:</p>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.65rem;">
+          <button type="button" class="btn btn-secondary demo-role-btn" data-email="superadmin@grepmany.com" style="min-height:2.25rem; padding:0.4rem 0.8rem; font-size:0.75rem; font-weight:800; background:rgba(255,255,255,0.08); border-color:rgba(255,255,255,0.15); color:#fff; cursor:pointer; text-align:center;">Superadmin</button>
+          <button type="button" class="btn btn-secondary demo-role-btn" data-email="admin@grepmany.com" style="min-height:2.25rem; padding:0.4rem 0.8rem; font-size:0.75rem; font-weight:800; background:rgba(255,255,255,0.08); border-color:rgba(255,255,255,0.15); color:#fff; cursor:pointer; text-align:center;">Admin</button>
+          <button type="button" class="btn btn-secondary demo-role-btn" data-email="teacher@grepmany.com" style="min-height:2.25rem; padding:0.4rem 0.8rem; font-size:0.75rem; font-weight:800; background:rgba(255,255,255,0.08); border-color:rgba(255,255,255,0.15); color:#fff; cursor:pointer; text-align:center;">Teacher</button>
+          <button type="button" class="btn btn-secondary demo-role-btn" data-email="student@grepmany.com" style="min-height:2.25rem; padding:0.4rem 0.8rem; font-size:0.75rem; font-weight:800; background:rgba(255,255,255,0.08); border-color:rgba(255,255,255,0.15); color:#fff; cursor:pointer; text-align:center;">Student</button>
+        </div>
+      </div>
     </section>
 
     <section class="auth-panel" aria-labelledby="login-title">
@@ -68,5 +75,26 @@
     </section>
   </main>
   <script src="./assets/js/app.js" defer></script>
+  <script>
+    document.addEventListener("DOMContentLoaded", () => {
+      document.querySelectorAll(".demo-role-btn").forEach(btn => {
+        btn.addEventListener("click", () => {
+          const email = btn.getAttribute("data-email");
+          const form = document.getElementById("login-form");
+          if (form) {
+            const emailInput = form.querySelector("input[name='email']");
+            const pwdInput = form.querySelector("input[name='password']");
+            if (emailInput && pwdInput) {
+              emailInput.value = email;
+              pwdInput.value = "password123";
+              // Trigger input event to update validation classes if any
+              emailInput.dispatchEvent(new Event('input', { bubbles: true }));
+              pwdInput.dispatchEvent(new Event('input', { bubbles: true }));
+            }
+          }
+        });
+      });
+    });
+  </script>
 </body>
 </html>

@@ -15,7 +15,7 @@ if (!$email || $password === '') {
 
 try {
     $conn = db();
-    $stmt = $conn->prepare('SELECT email, passwd, userid FROM login WHERE email = ? LIMIT 1');
+    $stmt = $conn->prepare('SELECT email, passwd, userid, role FROM login WHERE email = ? LIMIT 1');
     $stmt->bind_param('s', $email);
     $stmt->execute();
     $result = $stmt->get_result();
@@ -43,6 +43,7 @@ try {
     session_regenerate_id(true);
     $_SESSION['username'] = $email;
     $_SESSION['userid'] = $user['userid'];
+    $_SESSION['role'] = $user['role'];
 
     redirect_with_status(APP_HOME, 'success', 'Logged in successfully.');
 } catch (mysqli_sql_exception $error) {
