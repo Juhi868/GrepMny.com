@@ -1,13 +1,10 @@
 <!DOCTYPE html>
-<html lang="en" data-page="signup">
+<html lang="en" data-page="forgot">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="Create a GrepMany account for the registry and search workspace.">
-  <meta name="theme-color" content="#f7f4ed">
-  <title>GrepMany | Create Account</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <meta name="description" content="Reset your GrepMany account password.">
+  <title>GrepMany | Reset Password</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -52,7 +49,6 @@
       font-weight: 700;
       color: #fff;
       font-family: 'JetBrains Mono', monospace;
-      letter-spacing: -0.5px;
     }
 
     .brand-name {
@@ -132,13 +128,6 @@
       box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.06);
     }
 
-    label.field input::placeholder { color: #bbb; }
-
-    label.field small {
-      font-size: 12px;
-      color: #aaa;
-    }
-
     .btn-primary {
       width: 100%;
       height: 40px;
@@ -155,7 +144,6 @@
     }
 
     .btn-primary:hover { opacity: 0.85; }
-    .btn-primary:active { transform: scale(0.99); }
 
     .form-footer {
       text-align: center;
@@ -170,64 +158,43 @@
       text-decoration: none;
       border-bottom: 1px solid #ddd;
     }
-
-    .form-footer a:hover { border-color: #1a1a1a; }
   </style>
 </head>
 <body>
-  <a class="skip-link" href="#signup-form" style="position:absolute;left:-9999px">Skip to account form</a>
-
   <main class="auth-card">
     <a class="brand" href="./grepMny.html" aria-label="GrepMany home">
       <div class="brand-icon">GM</div>
       <span class="brand-name">GrepMany</span>
     </a>
 
-    <form id="signup-form" action="../scripts/php/signin.php" method="post" novalidate data-validate data-password-match>
+    <form id="forgot-form" action="../scripts/php/reset_password.php" method="post">
       <div class="form-heading">
-        <p class="eyebrow">Get started</p>
-        <h2>Create your account</h2>
-        <p>Use a unique user ID and a password with at least 6 characters.</p>
+        <p class="eyebrow">Recovery</p>
+        <h2>Reset your password</h2>
+        <p>Verify your identity with your Email and User ID.</p>
       </div>
 
-      <div class="alert" role="status" aria-live="polite" data-alert></div>
+      <div class="alert" role="status" aria-live="polite"></div>
 
       <label class="field">
         <span>Email address</span>
-        <input type="email" name="email" autocomplete="email" placeholder="you@example.com" maxlength="80" required>
-        <small></small>
+        <input type="email" name="email" required>
       </label>
 
       <label class="field">
         <span>User ID</span>
-        <input type="text" name="userid" autocomplete="username" placeholder="ritvik_01" minlength="3" maxlength="32" pattern="[A-Za-z0-9_\-]+" required>
-        <small>Letters, numbers, underscores, and hyphens only.</small>
+        <input type="text" name="userid" required>
       </label>
 
       <label class="field">
-        <span>Password</span>
-        <input type="password" name="password1" autocomplete="new-password" placeholder="Create password" minlength="6" required>
-        <small></small>
+        <span>New Password</span>
+        <input type="password" name="password" minlength="6" required>
       </label>
 
-      <label class="field">
-        <span>Confirm password</span>
-        <input type="password" name="password2" autocomplete="new-password" placeholder="Repeat password" minlength="6" required>
-        <small></small>
-      </label>
+      <button class="btn-primary" type="submit">Reset Password</button>
 
-      <label class="field">
-        <span>Registration Code (Optional)</span>
-        <input type="text" name="regcode" placeholder="Enter code for teacher/admin/superadmin access">
-        <small>Leave blank for a student account.</small>
-      </label>
-
-      <button class="btn-primary" type="submit">Register</button>
-
-      <p class="form-footer">Already have an account? <a href="../index.html">Log in</a></p>
+      <p class="form-footer"><a href="../index.html">Back to Login</a></p>
     </form>
   </main>
-
-  <script src="../assets/js/app.js" defer></script>
 </body>
 </html>

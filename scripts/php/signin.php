@@ -10,6 +10,16 @@ $email = filter_input(INPUT_POST, 'email', FILTER_VALIDATE_EMAIL);
 $userid = clean_string((string) ($_POST['userid'] ?? ''), 32);
 $password1 = (string) ($_POST['password1'] ?? '');
 $password2 = (string) ($_POST['password2'] ?? '');
+$regcode = (string) ($_POST['regcode'] ?? '');
+
+$role = 'student';
+if ($regcode === 'TEACHER-2026') {
+    $role = 'teacher';
+} elseif ($regcode === 'ADMIN-2026') {
+    $role = 'admin';
+} elseif ($regcode === 'SUPERADMIN-2026') {
+    $role = 'superadmin';
+}
 
 if (!$email) {
     redirect_with_status($signupPage, 'error', 'Enter a valid email address.');
@@ -34,8 +44,8 @@ try {
     }
 
     $hash = password_hash($password1, PASSWORD_DEFAULT);
-    $insert = $conn->prepare('INSERT INTO login (email, passwd, userid) VALUES (?, ?, ?)');
-    $insert->bind_param('sss', $email, $hash, $userid);
+    $insert = $conn->prepare('INSERT INTO login (email, passwd, userid, role) VALUES (?, ?, ?, ?)');
+    $insert->bind_param('ssss', $email, $hash, $userid, $role);
     $insert->execute();
 
     redirect_with_status(APP_LOGIN, 'success', 'Account created. You can log in now.');
