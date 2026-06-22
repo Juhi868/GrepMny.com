@@ -8,11 +8,11 @@ function db(): mysqli
 {
     mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
 
-    $host = getenv('GREPMANY_DB_HOST') ?: '127.0.0.1';
-    $user = getenv('GREPMANY_DB_USER') ?: 'root';
-    $pass = getenv('GREPMANY_DB_PASS') ?: '';
-    $name = getenv('GREPMANY_DB_NAME') ?: 'grepmny';
-    $port = (int) (getenv('GREPMANY_DB_PORT') ?: 3307);
+    $host = getenv('GrepMny_DB_HOST') ?: 'localhost';
+    $user = getenv('GrepMny_DB_USER') ?: 'root';
+    $pass = getenv('GrepMny_DB_PASS') ?: '';
+    $name = getenv('GrepMny_DB_NAME') ?: 'grepmny';
+    $port = (int) (getenv('GrepMny_DB_PORT') ?: 3307);
 
     $connection = new mysqli($host, $user, $pass, $name, $port);
     $connection->set_charset('utf8mb4');

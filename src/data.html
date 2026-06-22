@@ -3,9 +3,9 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="Submit validated student and course details in the GrepMany registry.">
+  <meta name="description" content="Submit validated student and course details in the GrepMny registry.">
   <meta name="theme-color" content="#f7f4ed">
-  <title>GrepMany | Student Registry</title>
+  <title>GrepMny | Student Registry</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
@@ -15,14 +15,13 @@
   <a class="skip-link" href="#registry-form">Skip to registry form</a>
   <header class="site-header compact-header" data-header>
     <nav class="nav-wrap" aria-label="Primary navigation">
-      <a class="brand-mark" href="./grepMny.html" aria-label="GrepMany home">
+      <a class="brand-mark" href="./grepMny.html" aria-label="GrepMny home">
         <span>GM</span>
-        <strong>GrepMany</strong>
+        <strong>GrepMny</strong>
       </a>
       <div class="site-menu always-visible">
         <a href="./grepMny.html">Home</a>
         <a href="./dashboard.php">Dashboard</a>
-        <a href="./grepMny.html#pattern-lab">Pattern Lab</a>
         <a href="../scripts/php/logout.php">Logout</a>
       </div>
       <button class="theme-toggle" type="button" aria-label="Toggle dark mode" data-theme-toggle></button>
@@ -53,37 +52,37 @@
 
         <label class="field">
           <span>Student name</span>
-          <input type="text" id="sname" name="sname" maxlength="40" placeholder="Riya Sharma" required>
+          <input type="text" id="sname" name="sname" maxlength="40"  required>
           <small></small>
         </label>
 
         <label class="field">
           <span>Student email</span>
-          <input type="email" id="semail" name="semail" maxlength="80" placeholder="riya@example.com" required>
+          <input type="email" id="semail" name="semail" maxlength="80"  required>
           <small></small>
         </label>
 
         <label class="field">
           <span>Course ID</span>
-          <input type="number" id="cid" name="cid" min="1" max="999999" placeholder="101" required>
+          <input type="number" id="cid" name="cid" min="1" max="999999"  required>
           <small></small>
         </label>
 
         <label class="field">
           <span>Course name</span>
-          <input type="text" id="cname" name="cname" maxlength="60" placeholder="Data Analytics" required>
+          <input type="text" id="cname" name="cname" maxlength="60"  required>
           <small></small>
         </label>
 
         <label class="field">
           <span>Duration</span>
-          <input type="text" id="duration" name="duration" maxlength="20" placeholder="12 weeks" required>
+          <input type="text" id="duration" name="duration" maxlength="20"  required>
           <small></small>
         </label>
 
         <label class="field">
           <span>Course fees</span>
-          <input type="number" id="fees" name="fees" min="0" max="9999999" step="1" placeholder="12000" required>
+          <input type="number" id="fees" name="fees" min="0" max="9999999" step="1"  required>
           <small></small>
         </label>
 

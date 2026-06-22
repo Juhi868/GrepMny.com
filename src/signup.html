@@ -3,9 +3,9 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="Create a GrepMany account for the registry and search workspace.">
+  <meta name="description" content="Create a GrepMny account for the registry and search workspace.">
   <meta name="theme-color" content="#f7f4ed">
-  <title>GrepMany | Create Account</title>
+  <title>GrepMny | Create Account</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
@@ -178,9 +178,9 @@
   <a class="skip-link" href="#signup-form" style="position:absolute;left:-9999px">Skip to account form</a>
 
   <main class="auth-card">
-    <a class="brand" href="./grepMny.html" aria-label="GrepMany home">
+    <a class="brand" href="./grepMny.html" aria-label="GrepMny home">
       <div class="brand-icon">GM</div>
-      <span class="brand-name">GrepMany</span>
+      <span class="brand-name">GrepMny</span>
     </a>
 
     <form id="signup-form" action="../scripts/php/signin.php" method="post" novalidate data-validate data-password-match>
@@ -194,13 +194,13 @@
 
       <label class="field">
         <span>Email address</span>
-        <input type="email" name="email" autocomplete="email" placeholder="you@example.com" maxlength="80" required>
+        <input type="email" name="email" autocomplete="email"  maxlength="80" required>
         <small></small>
       </label>
 
       <label class="field">
         <span>User ID</span>
-        <input type="text" name="userid" autocomplete="username" placeholder="ritvik_01" minlength="3" maxlength="32" pattern="[A-Za-z0-9_\-]+" required>
+        <input type="text" name="userid" autocomplete="username"  minlength="3" maxlength="32" pattern="[A-Za-z0-9_\-]+" required>
         <small>Letters, numbers, underscores, and hyphens only.</small>
       </label>
 
@@ -218,8 +218,8 @@
 
       <label class="field">
         <span>Registration Code (Optional)</span>
-        <input type="text" name="regcode" placeholder="Enter code for teacher/admin/superadmin access">
-        <small>Leave blank for a student account.</small>
+        <input type="text" name="regcode" >
+        
       </label>
 
       <button class="btn-primary" type="submit">Register</button>

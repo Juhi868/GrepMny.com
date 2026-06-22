@@ -134,15 +134,86 @@ if ($role === 'superadmin' || $role === 'admin') {
         }
     }
 }
+
+// NEW FEATURES DATA FETCHING
+$all_resources = [];
+$all_assignments = [];
+$all_gaps = [];
+$all_profiles = [];
+
+$my_profile = null;
+
+if ($role === 'superadmin' || $role === 'admin') {
+    $res_query = $conn->query("SELECT * FROM course_resources ORDER BY created_at DESC");
+    while ($r = $res_query->fetch_assoc()) $all_resources[] = $r;
+
+    $asn_query = $conn->query("SELECT * FROM assignments ORDER BY due_date ASC");
+    while ($r = $asn_query->fetch_assoc()) $all_assignments[] = $r;
+
+    $gap_query = $conn->query("SELECT * FROM student_gaps ORDER BY start_date DESC");
+    while ($r = $gap_query->fetch_assoc()) $all_gaps[] = $r;
+
+    $prof_query = $conn->query("SELECT * FROM student_profiles");
+    while ($r = $prof_query->fetch_assoc()) $all_profiles[$r['semail']] = $r;
+} elseif ($role === 'teacher') {
+    // Teachers can see all uploaded resources
+    $res_query = $conn->query("SELECT * FROM course_resources ORDER BY created_at DESC");
+    while ($r = $res_query->fetch_assoc()) $all_resources[] = $r;
+
+    if (!empty($teacher_cids)) {
+        $in_clause = implode(',', array_fill(0, count($teacher_cids), '?'));
+        $types = str_repeat('i', count($teacher_cids));
+
+        $asn_stmt = $conn->prepare("SELECT * FROM assignments WHERE cid IN ($in_clause) ORDER BY due_date ASC");
+        $asn_stmt->bind_param($types, ...$teacher_cids);
+        $asn_stmt->execute();
+        $res = $asn_stmt->get_result();
+        while ($r = $res->fetch_assoc()) $all_assignments[] = $r;
+    }
+    
+    // Gaps (all gaps visible to everyone)
+    $gap_query = $conn->query("SELECT * FROM student_gaps ORDER BY start_date DESC");
+    while ($r = $gap_query->fetch_assoc()) $all_gaps[] = $r;
+} elseif ($role === 'student') {
+    $student_cids = array_unique(array_column($student_enrollments, 'cid'));
+    if (!empty($student_cids)) {
+        $in_clause = implode(',', array_fill(0, count($student_cids), '?'));
+        $types = str_repeat('i', count($student_cids));
+        
+        $res_stmt = $conn->prepare("SELECT * FROM course_resources WHERE cid IN ($in_clause) ORDER BY created_at DESC");
+        $res_stmt->bind_param($types, ...$student_cids);
+        $res_stmt->execute();
+        $res = $res_stmt->get_result();
+        while ($r = $res->fetch_assoc()) $all_resources[] = $r;
+
+        $asn_stmt = $conn->prepare("SELECT a.*, sa.status, sa.score, sa.feedback FROM assignments a LEFT JOIN student_assignments sa ON a.id = sa.assignment_id AND sa.semail = ? WHERE a.cid IN ($in_clause) ORDER BY a.due_date ASC");
+        // We need to pass semail then cids
+        $bind_params = array_merge([$username], $student_cids);
+        $bind_types = 's' . $types;
+        $asn_stmt->bind_param($bind_types, ...$bind_params);
+        $asn_stmt->execute();
+        $res = $asn_stmt->get_result();
+        while ($r = $res->fetch_assoc()) $all_assignments[] = $r;
+    }
+
+    // Gaps (all gaps visible to everyone)
+    $gap_query = $conn->query("SELECT * FROM student_gaps ORDER BY start_date DESC");
+    while ($r = $gap_query->fetch_assoc()) $all_gaps[] = $r;
+
+    $prof_stmt = $conn->prepare("SELECT * FROM student_profiles WHERE semail = ?");
+    $prof_stmt->bind_param("s", $username);
+    $prof_stmt->execute();
+    $my_profile = $prof_stmt->get_result()->fetch_assoc();
+}
 ?>
 <!DOCTYPE html>
 <html lang="en" data-page="dashboard">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="GrepMany Role-Based Dashboard and Analytics Workspace.">
+  <meta name="description" content="GrepMny Role-Based Dashboard and Analytics Workspace.">
   <meta name="theme-color" content="#f7f4ed">
-  <title>GrepMany | Dashboard</title>
+  <title>GrepMny | Dashboard</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
@@ -383,7 +454,7 @@ if ($role === 'superadmin' || $role === 'admin') {
   <script>
     // Theme initializer block
     const root = document.documentElement;
-    const storedTheme = localStorage.getItem("grepmany-theme");
+    const storedTheme = localStorage.getItem("GrepMny-theme");
     const preferredDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
     const initialTheme = storedTheme || (preferredDark ? "dark" : "light");
     root.dataset.theme = initialTheme;
@@ -393,12 +464,13 @@ if ($role === 'superadmin' || $role === 'admin') {
   <a class="skip-link" href="#main-dashboard-content">Skip to content</a>
   <header class="site-header compact-header" data-header>
     <nav class="nav-wrap" aria-label="Primary navigation">
-      <a class="brand-mark" href="./dashboard.php" aria-label="GrepMany home">
+      <a class="brand-mark" href="./dashboard.php" aria-label="GrepMny home">
         <span>GM</span>
-        <strong>GrepMany</strong>
+        <strong>GrepMny</strong>
       </a>
       <div class="site-menu always-visible">
         <a href="./grepMny.html">About Workspace</a>
+        <a href="./profile.php">View Profile</a>
         <a href="../scripts/php/logout.php" style="color:var(--danger)">Sign Out</a>
       </div>
       <button class="theme-toggle" type="button" aria-label="Toggle dark mode" data-theme-toggle></button>
@@ -437,6 +509,10 @@ if ($role === 'superadmin' || $role === 'admin') {
             My Courses & Progress
           </button>
         <?php endif; ?>
+        <button class="sidebar-link" data-tab-trigger="resources" role="tab" aria-selected="false">Course Resources</button>
+        <button class="sidebar-link" data-tab-trigger="assignments" role="tab" aria-selected="false">Assignments</button>
+        <button class="sidebar-link" data-tab-trigger="gaps" role="tab" aria-selected="false">Gap Tracking</button>
+        <button class="sidebar-link" data-tab-trigger="profiles" role="tab" aria-selected="false">Student Profiles</button>
       </nav>
     </aside>
 
@@ -996,13 +1072,304 @@ if ($role === 'superadmin' || $role === 'admin') {
           </div>
         </div>
       <?php endif; ?>
+      <!-- ---------------------------------------------------- -->
+      <!-- COURSE RESOURCES TAB -->
+      <!-- ---------------------------------------------------- -->
+      <div id="tab-resources" class="tab-pane" role="tabpanel">
+        <div class="dashboard-card">
+          <h3>Course Resources</h3>
+          <p class="description">Learning materials, video lectures, and notes.</p>
+          
+          <?php if ($role === 'teacher'): ?>
+            <form action="../scripts/php/manage_resources.php" method="post" enctype="multipart/form-data" class="form-row-grid" style="margin-bottom:1.5rem; border-bottom:1px solid var(--line); padding-bottom:1.5rem;">
+              <input type="hidden" name="action" value="add_resource">
+              <label class="field compact">
+                <span>Course ID</span>
+                <input type="number" name="cid" required>
+              </label>
+              <label class="field compact">
+                <span>Resource Title</span>
+                <input type="text" name="title" required>
+              </label>
+              <label class="field compact">
+                <span>Type (e.g. PDF, Video)</span>
+                <input type="text" name="type" required>
+              </label>
+              <label class="field compact">
+                <span>URL / Link (or leave blank)</span>
+                <input type="url" name="url">
+              </label>
+              <label class="field compact">
+                <span>Upload PDF/Video</span>
+                <input type="file" name="resource_file" accept=".pdf,video/*">
+              </label>
+              <button class="btn btn-primary" type="submit">Add Resource</button>
+            </form>
+          <?php endif; ?>
+
+          <div class="data-table-wrapper">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Course ID</th>
+                  <th>Title</th>
+                  <th>Type</th>
+                  <th>Link</th>
+                  <?php if ($role === 'teacher'): ?><th>Actions</th><?php endif; ?>
+                </tr>
+              </thead>
+              <tbody>
+                <?php if (empty($all_resources)): ?>
+                  <tr><td colspan="5" style="text-align:center; color:var(--muted);">No resources found.</td></tr>
+                <?php else: foreach ($all_resources as $r): ?>
+                  <tr>
+                    <td><code><?php echo $r['cid']; ?></code></td>
+                    <td><strong><?php echo htmlspecialchars($r['title']); ?></strong></td>
+                    <td><?php echo htmlspecialchars($r['type']); ?></td>
+                    <td><a href="<?php echo htmlspecialchars($r['url']); ?>" target="_blank" style="color:var(--primary)">View Material</a></td>
+                    <?php if ($role === 'teacher'): ?>
+                      <td>
+                        <form action="../scripts/php/manage_resources.php" method="post" onsubmit="return confirm('Delete this resource?');">
+                          <input type="hidden" name="action" value="delete_resource">
+                          <input type="hidden" name="id" value="<?php echo $r['id']; ?>">
+                          <button type="submit" class="btn btn-secondary" style="padding:0.25rem 0.5rem; font-size:0.8rem; border-color:var(--danger); color:var(--danger);">Delete</button>
+                        </form>
+                      </td>
+                    <?php endif; ?>
+                  </tr>
+                <?php endforeach; endif; ?>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ---------------------------------------------------- -->
+      <!-- ASSIGNMENTS TAB -->
+      <!-- ---------------------------------------------------- -->
+      <div id="tab-assignments" class="tab-pane" role="tabpanel">
+        <div class="dashboard-card">
+          <h3>Assignments & Mock Tests</h3>
+          <p class="description">Create, submit, and grade assignments.</p>
+
+          <?php if ($role === 'teacher'): ?>
+            <form action="../scripts/php/manage_assignments.php" method="post" class="form-row-grid" style="margin-bottom:1.5rem; border-bottom:1px solid var(--line); padding-bottom:1.5rem;">
+              <input type="hidden" name="action" value="create_assignment">
+              <label class="field compact">
+                <span>Course ID</span>
+                <input type="number" name="cid" required>
+              </label>
+              <label class="field compact">
+                <span>Title</span>
+                <input type="text" name="title" required>
+              </label>
+              <label class="field compact">
+                <span>Type <span>
+                <input type="text" name="type" value="Assignment" required>
+              </label>
+              <label class="field compact">
+                <span>Due Date</span>
+                <input type="datetime-local" name="due_date" required>
+              </label>
+              <button class="btn btn-primary" type="submit">Create</button>
+            </form>
+          <?php endif; ?>
+
+          <div class="data-table-wrapper">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Course ID</th>
+                  <th>Title & Type</th>
+                  <th>Due Date</th>
+                  <?php if ($role === 'student'): ?>
+                    <th>Status / Score</th>
+                    <th>Action</th>
+                  <?php else: ?>
+                    <th>Submissions</th>
+                    <th>Manage MCQs</th>
+                  <?php endif; ?>
+                </tr>
+              </thead>
+              <tbody>
+                <?php if (empty($all_assignments)): ?>
+                  <tr><td colspan="5" style="text-align:center; color:var(--muted);">No assignments.</td></tr>
+                <?php else: foreach ($all_assignments as $a): ?>
+                  <tr>
+                    <td><code><?php echo $a['cid']; ?></code></td>
+                    <td><strong><?php echo htmlspecialchars($a['title']); ?></strong><br><small><?php echo htmlspecialchars($a['type']); ?></small></td>
+                    <td><?php echo htmlspecialchars($a['due_date']); ?></td>
+                    <?php if ($role === 'student'): ?>
+                      <td>
+                        <?php echo htmlspecialchars($a['status'] ?? 'Not Submitted'); ?>
+                        <?php if (isset($a['score'])): ?><br>Score: <?php echo $a['score']; ?>%<?php endif; ?>
+                      </td>
+                      <td>
+                        <?php 
+                          // Check if it has MCQs
+                          $mcq_check = $conn->prepare("SELECT COUNT(*) as c FROM mcq_questions WHERE assignment_id = ?");
+                          $mcq_check->bind_param("i", $a['id']);
+                          $mcq_check->execute();
+                          $has_mcq = $mcq_check->get_result()->fetch_assoc()['c'] > 0;
+                        ?>
+                        <?php if (!isset($a['status']) || $a['status'] === 'Not Submitted'): ?>
+                          <?php if ($has_mcq): ?>
+                            <a href="take_mcq.php?assignment_id=<?php echo $a['id']; ?>" class="btn btn-primary" style="padding:0.25rem 0.5rem; font-size:0.8rem;">Take Test</a>
+                          <?php else: ?>
+                            <form action="../scripts/php/manage_assignments.php" method="post">
+                              <input type="hidden" name="action" value="submit_assignment">
+                              <input type="hidden" name="assignment_id" value="<?php echo $a['id']; ?>">
+                              <button type="submit" class="btn btn-primary" style="padding:0.25rem 0.5rem; font-size:0.8rem;">Submit</button>
+                            </form>
+                          <?php endif; ?>
+                        <?php endif; ?>
+                      </td>
+                    <?php else: ?>
+                      <td>
+                        <?php
+                          $sub_stmt = $conn->prepare("SELECT COUNT(*) as c FROM student_assignments WHERE assignment_id = ?");
+                          $sub_stmt->bind_param("i", $a['id']);
+                          $sub_stmt->execute();
+                          echo $sub_stmt->get_result()->fetch_assoc()['c'] . " submitted";
+                        ?>
+                      </td>
+                      <td>
+                        <a href="manage_mcq_ui.php?assignment_id=<?php echo $a['id']; ?>" class="btn btn-secondary" style="padding:0.25rem 0.5rem; font-size:0.8rem;">Manage MCQs</a>
+                      </td>
+                    <?php endif; ?>
+                  </tr>
+                <?php endforeach; endif; ?>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ---------------------------------------------------- -->
+      <!-- GAP TRACKING TAB -->
+      <!-- ---------------------------------------------------- -->
+      <div id="tab-gaps" class="tab-pane" role="tabpanel">
+        <div class="dashboard-card">
+          <h3>Gap Tracking</h3>
+          <p class="description">Academic breaks taken by students.</p>
+
+          <?php if ($role === 'student'): ?>
+          <form action="../scripts/php/manage_gaps.php" method="post" class="form-row-grid" style="margin-bottom:1.5rem; border-bottom:1px solid var(--line); padding-bottom:1.5rem;">
+            <input type="hidden" name="action" value="add_gap">
+            <label class="field compact">
+              <span>Student Email</span>
+              <input type="email" name="semail" value="<?php echo htmlspecialchars($username); ?>" readonly>
+            </label>
+            <label class="field compact">
+              <span>Start Date</span>
+              <input type="date" name="start_date" required>
+            </label>
+            <label class="field compact">
+              <span>End Date</span>
+              <input type="date" name="end_date" required>
+            </label>
+            <label class="field compact">
+              <span>Reason</span>
+              <input type="text" name="reason" required>
+            </label>
+            <button class="btn btn-primary" type="submit">Record Gap</button>
+          </form>
+          <?php endif; ?>
+
+          <div class="data-table-wrapper">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Student Email</th>
+                  <th>Dates</th>
+                  <th>Reason</th>
+                  <?php if ($role !== 'student'): ?><th>Actions</th><?php endif; ?>
+                </tr>
+              </thead>
+              <tbody>
+                <?php if (empty($all_gaps)): ?>
+                  <tr><td colspan="4" style="text-align:center; color:var(--muted);">No gaps recorded.</td></tr>
+                <?php else: foreach ($all_gaps as $g): ?>
+                  <tr>
+                    <td><strong><?php echo htmlspecialchars($g['semail']); ?></strong></td>
+                    <td><?php echo htmlspecialchars($g['start_date']); ?> to <?php echo htmlspecialchars($g['end_date']); ?></td>
+                    <td><?php echo htmlspecialchars($g['reason']); ?></td>
+                    <?php if ($role !== 'student'): ?>
+                      <td>
+                        <form action="../scripts/php/manage_gaps.php" method="post" onsubmit="return confirm('Delete this gap record?');">
+                          <input type="hidden" name="action" value="delete_gap">
+                          <input type="hidden" name="id" value="<?php echo $g['id']; ?>">
+                          <button type="submit" class="btn btn-secondary" style="padding:0.25rem 0.5rem; font-size:0.8rem; border-color:var(--danger); color:var(--danger);">Delete</button>
+                        </form>
+                      </td>
+                    <?php endif; ?>
+                  </tr>
+                <?php endforeach; endif; ?>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ---------------------------------------------------- -->
+      <!-- STUDENT PROFILES TAB -->
+      <!-- ---------------------------------------------------- -->
+      <div id="tab-profiles" class="tab-pane" role="tabpanel">
+        <div class="dashboard-card">
+          <h3>Student Profiles</h3>
+          <p class="description">Detailed profile information and attendance.</p>
+          
+          <?php if ($role === 'student'): ?>
+            <form action="../scripts/php/manage_profiles.php" method="post" style="max-width:500px; display:flex; flex-direction:column; gap:1rem;">
+              <input type="hidden" name="action" value="update_profile">
+              <input type="hidden" name="semail" value="<?php echo htmlspecialchars($username); ?>">
+              <label class="field">
+                <span>Bio</span>
+                <textarea name="bio" rows="4" style="border:1px solid var(--line); border-radius:var(--radius); padding:0.5rem; font-family:inherit;"><?php echo htmlspecialchars($my_profile['bio'] ?? ''); ?></textarea>
+              </label>
+              <!-- Attendance tracking removed per request -->
+              <button class="btn btn-primary" type="submit">Update Profile</button>
+            </form>
+          <?php else: ?>
+            <div class="data-table-wrapper">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Student Email</th>
+                    <th>Bio</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <?php if (empty($all_profiles)): ?>
+                    <tr><td colspan="3" style="text-align:center; color:var(--muted);">No detailed profiles yet.</td></tr>
+                  <?php else: foreach ($all_profiles as $p): ?>
+                    <tr>
+                      <td><strong><?php echo htmlspecialchars($p['semail']); ?></strong></td>
+                      <td><?php echo htmlspecialchars(substr($p['bio'] ?? '', 0, 50)); ?>...</td>
+                      <td>
+                        <form action="../scripts/php/manage_profiles.php" method="post" style="display:inline-flex; gap:0.5rem;">
+                          <input type="hidden" name="action" value="update_profile">
+                          <input type="hidden" name="semail" value="<?php echo htmlspecialchars($p['semail']); ?>">
+                          <input type="hidden" name="bio" value="<?php echo htmlspecialchars($p['bio'] ?? ''); ?>">
+                          <button type="submit" class="btn btn-primary" style="padding:0.25rem 0.5rem; font-size:0.8rem;">Save</button>
+                        </form>
+                      </td>
+                    </tr>
+                  <?php endforeach; endif; ?>
+                </tbody>
+              </table>
+            </div>
+          <?php endif; ?>
+        </div>
+      </div>
     </section>
   </main>
 
   <footer class="site-footer">
     <div style="width: min(1180px, calc(100% - 2rem)); margin: 0 auto; display:flex; justify-content:space-between; flex-wrap:wrap; gap:1.5rem;">
       <div>
-        <a class="brand-mark" href="./dashboard.php"><span>GM</span><strong>GrepMany</strong></a>
+        <a class="brand-mark" href="./dashboard.php"><span>GM</span><strong>GrepMny</strong></a>
         <p>Dynamic Analytics & Role-Based Dashboard Portal.</p>
       </div>
       <div class="footer-links">

@@ -3,9 +3,9 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="GrepMany is a modern search and student registry workspace for finding records, testing patterns, and managing course data.">
+  <meta name="description" content="GrepMny is a modern search and student registry workspace for finding records, testing patterns, and managing course data.">
   <meta name="theme-color" content="#f7f4ed">
-  <title>GrepMany | Search Workspace</title>
+  <title>GrepMny | Search Workspace</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
@@ -15,9 +15,9 @@
   <a class="skip-link" href="#main-content">Skip to content</a>
   <header class="site-header" data-header>
     <nav class="nav-wrap" aria-label="Primary navigation">
-      <a class="brand-mark" href="./grepMny.html" aria-label="GrepMany home">
+      <a class="brand-mark" href="./grepMny.html" aria-label="GrepMny home">
         <span>GM</span>
-        <strong>GrepMany</strong>
+        <strong>GrepMny</strong>
       </a>
       <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="site-menu" data-menu-toggle>
         <span></span><span></span><span></span>
@@ -26,10 +26,10 @@
       <div id="site-menu" class="site-menu" data-menu>
         <a href="#about">About</a>
         <a href="#features">Features</a>
-        <a href="#pattern-lab">Pattern Lab</a>
         <a href="#workflow">Workflow</a>
-        <a href="./dashboard.php"  font-weight:800;">Dashboard</a>
+        <a href="./dashboard.php"  font-weight:800;>Dashboard</a>
         <a href="./data.html">Registry</a>
+        <a href="./profile.php">View Profile</a>
         <a href="../scripts/php/logout.php">Sign out</a>
       </div>
       <div class="nav-actions">
@@ -47,7 +47,7 @@
       <div class="hero-content">
         <p class="eyebrow">Production-ready registry workspace</p>
         <h1>Easily search, manage, and organize course records in one place.</h1>
-        <p>Designed for efficiency, GrepMany helps manage students, courses, and enrollments through a modern dashboard, secure workflows, and easy-to-use search features.</p>
+        <p>Designed for efficiency, GrepMny helps manage students, courses, and enrollments through a modern dashboard, secure workflows, and easy-to-use search features.</p>
         <div class="hero-actions">
           <a class="btn btn-primary" href="./dashboard.php">Go to Dashboard</a>
           <a class="btn btn-secondary" href="./data.html">Open Registry</a>
@@ -58,7 +58,7 @@
           <div><strong>0</strong><span>Duplicate documents</span></div>
         </div>
       </div>
-      <div class="hero-media" aria-label="GrepMany command preview">
+      <div class="hero-media" aria-label="GrepMny command preview">
         <img src="../media/city1.jpg" alt="City skyline representing a connected data workspace" loading="eager">
         
       </div>
@@ -68,7 +68,7 @@
       <div class="section-kicker">About</div>
       <div class="section-split">
         <h2>Built for quick searches and clean student course records.</h2>
-        <p>GrepMany started as a login, homepage, and student information form. The upgraded version turns that into a polished workspace with safer forms, stronger visual hierarchy, better mobile behavior, and clearer paths from sign in to registry submission.</p>
+        <p>GrepMny started as a login, homepage, and student information form. The upgraded version turns that into a polished workspace with safer forms, stronger visual hierarchy, better mobile behavior, and clearer paths from sign in to registry submission.</p>
       </div>
     </section>
 
@@ -100,38 +100,17 @@
         </article>
         <article class="info-card" data-search-item>
           <span class="card-icon">05</span>
-          <h3>Pattern Lab</h3>
-          <p>Test search terms against sample records before moving data into the registry workflow.</p>
-        </article>
-        <article class="info-card" data-search-item>
-          <span class="card-icon">06</span>
           <h3>Deployment shape</h3>
           <p>Assets, PHP helpers, pages, and media now live in clearer folders so the project can grow.</p>
         </article>
       </div>
     </section>
 
-    <section id="pattern-lab" class="lab-section">
-      <div class="lab-panel">
-        <div>
-          <p class="eyebrow">Pattern Lab</p>
-          <h2>Try a quick search before saving data.</h2>
-          <p>Type a keyword or regular expression to search the sample course records. Invalid regular expressions fall back to plain text search.</p>
-        </div>
-        <label class="field compact">
-          <span>Search pattern</span>
-          <input type="text" value="data" data-pattern-input aria-describedby="pattern-help">
-          <small id="pattern-help">Examples: data, design, ^Riya, python|analytics</small>
-        </label>
-      </div>
-      <div class="results-list" data-pattern-results aria-live="polite"></div>
-    </section>
-
     <section id="workflow" class="content-band">
       <div class="section-kicker">Workflow</div>
       <div class="timeline">
         <div><strong>1</strong><span>Log in or create an account.</span></div>
-        <div><strong>2</strong><span>Search or test a pattern from the dashboard.</span></div>
+        <div><strong>2</strong><span>Search records from the dashboard.</span></div>
         <div><strong>3</strong><span>Open the registry and submit validated course details.</span></div>
         <div><strong>4</strong><span>Review server responses and keep records consistent.</span></div>
       </div>
@@ -140,7 +119,7 @@
 
   <footer class="site-footer">
     <div>
-      <a class="brand-mark" href="./grepMny.html"><span>GM</span><strong>GrepMany</strong></a>
+      <a class="brand-mark" href="./grepMny.html"><span>GM</span><strong>GrepMny</strong></a>
       <p>Built for clean registry operations and faster search workflows.</p>
     </div>
     <div class="footer-links">

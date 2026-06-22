@@ -5,7 +5,7 @@ require_once __DIR__ . '/config.php';
 
 // Allow running from command line or web browser
 if (php_sapi_name() !== 'cli') {
-    echo '<!DOCTYPE html><html><head><title>GrepMany DB Setup</title></head><body style="font-family: sans-serif; padding: 20px;">';
+    echo '<!DOCTYPE html><html><head><title>GrepMny DB Setup</title></head><body style="font-family: sans-serif; padding: 20px;">';
 }
 
 try {
@@ -34,10 +34,10 @@ try {
 
     // 3. Seed roles
     $seedUsers = [
-        ['email' => 'superadmin@grepmany.com', 'userid' => 'superadmin', 'role' => 'superadmin', 'passwd' => password_hash('password123', PASSWORD_DEFAULT)],
-        ['email' => 'admin@grepmany.com', 'userid' => 'admin', 'role' => 'admin', 'passwd' => password_hash('password123', PASSWORD_DEFAULT)],
-        ['email' => 'teacher@grepmany.com', 'userid' => 'teacher', 'role' => 'teacher', 'passwd' => password_hash('password123', PASSWORD_DEFAULT)],
-        ['email' => 'student@grepmany.com', 'userid' => 'student', 'role' => 'student', 'passwd' => password_hash('password123', PASSWORD_DEFAULT)],
+        ['email' => 'superadmin@GrepMny.com', 'userid' => 'superadmin', 'role' => 'superadmin', 'passwd' => password_hash('password123', PASSWORD_DEFAULT)],
+        ['email' => 'admin@GrepMny.com', 'userid' => 'admin', 'role' => 'admin', 'passwd' => password_hash('password123', PASSWORD_DEFAULT)],
+        ['email' => 'teacher@GrepMny.com', 'userid' => 'teacher', 'role' => 'teacher', 'passwd' => password_hash('password123', PASSWORD_DEFAULT)],
+        ['email' => 'student@GrepMny.com', 'userid' => 'student', 'role' => 'student', 'passwd' => password_hash('password123', PASSWORD_DEFAULT)],
     ];
 
     foreach ($seedUsers as $user) {
@@ -59,11 +59,103 @@ try {
         }
     }
 
+    // New Tables for Features
+    $tables = [
+        "course_resources" => "CREATE TABLE IF NOT EXISTS `course_resources` (
+            `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
+            `cid` INT NOT NULL,
+            `teacher_email` VARCHAR(80) NOT NULL,
+            `resource_type` VARCHAR(10) NOT NULL,
+            `file_path` VARCHAR(255) NOT NULL,
+            `title` VARCHAR(100) NOT NULL,
+            `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (`id`),
+            KEY `idx_cr_cid` (`cid`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+
+        "assignments" => "CREATE TABLE IF NOT EXISTS `assignments` (
+            `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
+            `cid` INT NOT NULL,
+            `teacher_email` VARCHAR(80) NOT NULL,
+            `title` VARCHAR(100) NOT NULL,
+            `week_number` INT NOT NULL,
+            `due_date` DATE NOT NULL,
+            `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (`id`),
+            KEY `idx_asn_cid` (`cid`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+
+        "assignment_questions" => "CREATE TABLE IF NOT EXISTS `assignment_questions` (
+            `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
+            `assignment_id` INT UNSIGNED NOT NULL,
+            `question_text` TEXT NOT NULL,
+            `option_a` VARCHAR(255) NOT NULL,
+            `option_b` VARCHAR(255) NOT NULL,
+            `option_c` VARCHAR(255) NOT NULL,
+            `option_d` VARCHAR(255) NOT NULL,
+            `correct_option` CHAR(1) NOT NULL,
+            PRIMARY KEY (`id`),
+            KEY `idx_aq_asn` (`assignment_id`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+
+        "student_assignments" => "CREATE TABLE IF NOT EXISTS `student_assignments` (
+            `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
+            `assignment_id` INT UNSIGNED NOT NULL,
+            `semail` VARCHAR(80) NOT NULL,
+            `score` INT NOT NULL,
+            `total` INT NOT NULL,
+            `submitted_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (`id`),
+            KEY `idx_sa_asn` (`assignment_id`),
+            KEY `idx_sa_email` (`semail`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+
+        "mock_tests" => "CREATE TABLE IF NOT EXISTS `mock_tests` (
+            `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
+            `cid` INT NOT NULL,
+            `teacher_email` VARCHAR(80) NOT NULL,
+            `title` VARCHAR(100) NOT NULL,
+            `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (`id`),
+            KEY `idx_mt_cid` (`cid`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+
+        "mock_test_questions" => "CREATE TABLE IF NOT EXISTS `mock_test_questions` (
+            `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
+            `test_id` INT UNSIGNED NOT NULL,
+            `question_text` TEXT NOT NULL,
+            `option_a` VARCHAR(255) NOT NULL,
+            `option_b` VARCHAR(255) NOT NULL,
+            `option_c` VARCHAR(255) NOT NULL,
+            `option_d` VARCHAR(255) NOT NULL,
+            `correct_option` CHAR(1) NOT NULL,
+            PRIMARY KEY (`id`),
+            KEY `idx_mtq_test` (`test_id`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+
+        "mock_test_results" => "CREATE TABLE IF NOT EXISTS `mock_test_results` (
+            `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
+            `test_id` INT UNSIGNED NOT NULL,
+            `semail` VARCHAR(80) NOT NULL,
+            `score` INT NOT NULL,
+            `total` INT NOT NULL,
+            `submitted_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (`id`),
+            KEY `idx_mtr_test` (`test_id`),
+            KEY `idx_mtr_email` (`semail`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+    ];
+
+    foreach ($tables as $name => $query) {
+        $conn->query($query);
+        echo "Created or verified '$name' table." . (php_sapi_name() === 'cli' ? "\n" : "<br>\n");
+    }
+
     // 4. Seed mock courses and teacher assignments
     $mockTeachers = [
-        ['email' => 'teacher@grepmany.com', 'cid' => 101, 'cname' => 'Data Analytics'],
-        ['email' => 'teacher@grepmany.com', 'cid' => 102, 'cname' => 'Python Foundations'],
-        ['email' => 'another_teacher@grepmany.com', 'cid' => 103, 'cname' => 'UX Research'],
+        ['email' => 'teacher@GrepMny.com', 'cid' => 101, 'cname' => 'Data Analytics'],
+        ['email' => 'teacher@GrepMny.com', 'cid' => 102, 'cname' => 'Python Foundations'],
+        ['email' => 'another_teacher@GrepMny.com', 'cid' => 103, 'cname' => 'UX Research'],
     ];
 
     foreach ($mockTeachers as $ct) {
@@ -85,8 +177,8 @@ try {
         ['sname' => 'Maya Rao', 'semail' => 'maya@example.com', 'cid' => 103, 'cname' => 'UX Research', 'duration' => '6 weeks', 'start_date' => '2026-07-01', 'end_date' => '2026-08-12', 'fees' => 7500],
         ['sname' => 'Dev Patel', 'semail' => 'dev@example.com', 'cid' => 104, 'cname' => 'Cloud Security', 'duration' => '10 weeks', 'start_date' => '2026-06-01', 'end_date' => '2026-08-10', 'fees' => 14500],
         ['sname' => 'Sara Khan', 'semail' => 'sara@example.com', 'cid' => 101, 'cname' => 'Data Analytics', 'duration' => '12 weeks', 'start_date' => '2026-06-01', 'end_date' => '2026-08-24', 'fees' => 12000],
-        ['sname' => 'Rahul Kumar', 'semail' => 'student@grepmany.com', 'cid' => 101, 'cname' => 'Data Analytics', 'duration' => '12 weeks', 'start_date' => '2026-06-01', 'end_date' => '2026-08-24', 'fees' => 12000],
-        ['sname' => 'Rahul Kumar', 'semail' => 'student@grepmany.com', 'cid' => 102, 'cname' => 'Python Foundations', 'duration' => '8 weeks', 'start_date' => '2026-06-15', 'end_date' => '2026-08-10', 'fees' => 9000],
+        ['sname' => 'Rahul Kumar', 'semail' => 'student@GrepMny.com', 'cid' => 101, 'cname' => 'Data Analytics', 'duration' => '12 weeks', 'start_date' => '2026-06-01', 'end_date' => '2026-08-24', 'fees' => 12000],
+        ['sname' => 'Rahul Kumar', 'semail' => 'student@GrepMny.com', 'cid' => 102, 'cname' => 'Python Foundations', 'duration' => '8 weeks', 'start_date' => '2026-06-15', 'end_date' => '2026-08-10', 'fees' => 9000],
     ];
 
     foreach ($mockStudents as $student) {

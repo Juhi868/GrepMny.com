@@ -1,6 +1,6 @@
 (function () {
   const root = document.documentElement;
-  const storedTheme = localStorage.getItem("grepmany-theme");
+  const storedTheme = localStorage.getItem("GrepMny-theme");
   const preferredDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
   const initialTheme = storedTheme || (preferredDark ? "dark" : "light");
   root.dataset.theme = initialTheme;
@@ -13,7 +13,7 @@
     updateThemeButton(button);
     button.addEventListener("click", () => {
       root.dataset.theme = root.dataset.theme === "dark" ? "light" : "dark";
-      localStorage.setItem("grepmany-theme", root.dataset.theme);
+      localStorage.setItem("GrepMny-theme", root.dataset.theme);
       document.querySelectorAll("[data-theme-toggle]").forEach(updateThemeButton);
     });
   });
