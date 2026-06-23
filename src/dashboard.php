@@ -139,9 +139,7 @@ if ($role === 'superadmin' || $role === 'admin') {
 $all_resources = [];
 $all_assignments = [];
 $all_gaps = [];
-$all_profiles = [];
 
-$my_profile = null;
 
 if ($role === 'superadmin' || $role === 'admin') {
     $res_query = $conn->query("SELECT * FROM course_resources ORDER BY created_at DESC");
@@ -153,8 +151,7 @@ if ($role === 'superadmin' || $role === 'admin') {
     $gap_query = $conn->query("SELECT * FROM student_gaps ORDER BY start_date DESC");
     while ($r = $gap_query->fetch_assoc()) $all_gaps[] = $r;
 
-    $prof_query = $conn->query("SELECT * FROM student_profiles");
-    while ($r = $prof_query->fetch_assoc()) $all_profiles[$r['semail']] = $r;
+
 } elseif ($role === 'teacher') {
     // Teachers can see all uploaded resources
     $res_query = $conn->query("SELECT * FROM course_resources ORDER BY created_at DESC");
@@ -200,10 +197,7 @@ if ($role === 'superadmin' || $role === 'admin') {
     $gap_query = $conn->query("SELECT * FROM student_gaps ORDER BY start_date DESC");
     while ($r = $gap_query->fetch_assoc()) $all_gaps[] = $r;
 
-    $prof_stmt = $conn->prepare("SELECT * FROM student_profiles WHERE semail = ?");
-    $prof_stmt->bind_param("s", $username);
-    $prof_stmt->execute();
-    $my_profile = $prof_stmt->get_result()->fetch_assoc();
+
 }
 ?>
 <!DOCTYPE html>
@@ -426,9 +420,55 @@ if ($role === 'superadmin' || $role === 'admin') {
 
     .form-row-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr));
       gap: 1rem;
       align-items: end;
+    }
+
+    .form-row-grid .field {
+      min-width: 0;
+      margin-bottom: 0;
+    }
+
+    .form-row-grid .field input,
+    .form-row-grid .field select,
+    .form-row-grid .field textarea {
+      box-sizing: border-box;
+      width: 100%;
+      min-width: 0;
+    }
+
+    .form-row-grid input[type="date"],
+    .form-row-grid input[type="datetime-local"] {
+      appearance: auto;
+      font-size: 0.95rem;
+      line-height: 1.2;
+      padding-right: 0.75rem;
+    }
+
+    .assignment-form {
+      grid-template-columns:
+        minmax(7rem, 0.7fr)
+        minmax(12rem, 1.2fr)
+        minmax(9rem, 0.9fr)
+        minmax(14rem, 1.1fr)
+        max-content;
+    }
+
+    @media (max-width: 980px) {
+      .assignment-form {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .assignment-form .btn {
+        width: 100%;
+      }
+    }
+
+    @media (max-width: 560px) {
+      .assignment-form {
+        grid-template-columns: 1fr;
+      }
     }
 
     .tab-pane {
@@ -512,7 +552,7 @@ if ($role === 'superadmin' || $role === 'admin') {
         <button class="sidebar-link" data-tab-trigger="resources" role="tab" aria-selected="false">Course Resources</button>
         <button class="sidebar-link" data-tab-trigger="assignments" role="tab" aria-selected="false">Assignments</button>
         <button class="sidebar-link" data-tab-trigger="gaps" role="tab" aria-selected="false">Gap Tracking</button>
-        <button class="sidebar-link" data-tab-trigger="profiles" role="tab" aria-selected="false">Student Profiles</button>
+
       </nav>
     </aside>
 
@@ -1153,7 +1193,7 @@ if ($role === 'superadmin' || $role === 'admin') {
           <p class="description">Create, submit, and grade assignments.</p>
 
           <?php if ($role === 'teacher'): ?>
-            <form action="../scripts/php/manage_assignments.php" method="post" class="form-row-grid" style="margin-bottom:1.5rem; border-bottom:1px solid var(--line); padding-bottom:1.5rem;">
+            <form action="../scripts/php/manage_assignments.php" method="post" class="form-row-grid assignment-form" style="margin-bottom:1.5rem; border-bottom:1px solid var(--line); padding-bottom:1.5rem;">
               <input type="hidden" name="action" value="create_assignment">
               <label class="field compact">
                 <span>Course ID</span>
@@ -1164,7 +1204,7 @@ if ($role === 'superadmin' || $role === 'admin') {
                 <input type="text" name="title" required>
               </label>
               <label class="field compact">
-                <span>Type <span>
+                <span>Type</span>
                 <input type="text" name="type" value="Assignment" required>
               </label>
               <label class="field compact">
@@ -1206,15 +1246,16 @@ if ($role === 'superadmin' || $role === 'admin') {
                       </td>
                       <td>
                         <?php 
-                          // Check if it has MCQs
-                          $mcq_check = $conn->prepare("SELECT COUNT(*) as c FROM mcq_questions WHERE assignment_id = ?");
-                          $mcq_check->bind_param("i", $a['id']);
+                          // Check if there is a mock test for this assignment/course.
+                          $mcq_check = $conn->prepare("SELECT id FROM mock_tests WHERE cid = ? AND title = ? LIMIT 1");
+                          $mcq_check->bind_param("is", $a['cid'], $a['title']);
                           $mcq_check->execute();
-                          $has_mcq = $mcq_check->get_result()->fetch_assoc()['c'] > 0;
+                          $mcq_row = $mcq_check->get_result()->fetch_assoc();
+                          $has_mcq = $mcq_row !== null;
                         ?>
                         <?php if (!isset($a['status']) || $a['status'] === 'Not Submitted'): ?>
                           <?php if ($has_mcq): ?>
-                            <a href="take_mcq.php?assignment_id=<?php echo $a['id']; ?>" class="btn btn-primary" style="padding:0.25rem 0.5rem; font-size:0.8rem;">Take Test</a>
+                            <a href="take_mcq.php?test_id=<?php echo $mcq_row['id']; ?>" class="btn btn-primary" style="padding:0.25rem 0.5rem; font-size:0.8rem;">Take Test</a>
                           <?php else: ?>
                             <form action="../scripts/php/manage_assignments.php" method="post">
                               <input type="hidden" name="action" value="submit_assignment">
@@ -1256,9 +1297,10 @@ if ($role === 'superadmin' || $role === 'admin') {
           <?php if ($role === 'student'): ?>
           <form action="../scripts/php/manage_gaps.php" method="post" class="form-row-grid" style="margin-bottom:1.5rem; border-bottom:1px solid var(--line); padding-bottom:1.5rem;">
             <input type="hidden" name="action" value="add_gap">
+            <input type="hidden" name="semail" value="<?php echo htmlspecialchars($username); ?>">
             <label class="field compact">
               <span>Student Email</span>
-              <input type="email" name="semail" value="<?php echo htmlspecialchars($username); ?>" readonly>
+              <input type="email" value="<?php echo htmlspecialchars($username); ?>" readonly>
             </label>
             <label class="field compact">
               <span>Start Date</span>
@@ -1280,7 +1322,7 @@ if ($role === 'superadmin' || $role === 'admin') {
             <table class="data-table">
               <thead>
                 <tr>
-                  <th>Student Email</th>
+                  <th>Student Name</th>
                   <th>Dates</th>
                   <th>Reason</th>
                   <?php if ($role !== 'student'): ?><th>Actions</th><?php endif; ?>
@@ -1311,58 +1353,7 @@ if ($role === 'superadmin' || $role === 'admin') {
         </div>
       </div>
 
-      <!-- ---------------------------------------------------- -->
-      <!-- STUDENT PROFILES TAB -->
-      <!-- ---------------------------------------------------- -->
-      <div id="tab-profiles" class="tab-pane" role="tabpanel">
-        <div class="dashboard-card">
-          <h3>Student Profiles</h3>
-          <p class="description">Detailed profile information and attendance.</p>
-          
-          <?php if ($role === 'student'): ?>
-            <form action="../scripts/php/manage_profiles.php" method="post" style="max-width:500px; display:flex; flex-direction:column; gap:1rem;">
-              <input type="hidden" name="action" value="update_profile">
-              <input type="hidden" name="semail" value="<?php echo htmlspecialchars($username); ?>">
-              <label class="field">
-                <span>Bio</span>
-                <textarea name="bio" rows="4" style="border:1px solid var(--line); border-radius:var(--radius); padding:0.5rem; font-family:inherit;"><?php echo htmlspecialchars($my_profile['bio'] ?? ''); ?></textarea>
-              </label>
-              <!-- Attendance tracking removed per request -->
-              <button class="btn btn-primary" type="submit">Update Profile</button>
-            </form>
-          <?php else: ?>
-            <div class="data-table-wrapper">
-              <table class="data-table">
-                <thead>
-                  <tr>
-                    <th>Student Email</th>
-                    <th>Bio</th>
-                    <th>Action</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <?php if (empty($all_profiles)): ?>
-                    <tr><td colspan="3" style="text-align:center; color:var(--muted);">No detailed profiles yet.</td></tr>
-                  <?php else: foreach ($all_profiles as $p): ?>
-                    <tr>
-                      <td><strong><?php echo htmlspecialchars($p['semail']); ?></strong></td>
-                      <td><?php echo htmlspecialchars(substr($p['bio'] ?? '', 0, 50)); ?>...</td>
-                      <td>
-                        <form action="../scripts/php/manage_profiles.php" method="post" style="display:inline-flex; gap:0.5rem;">
-                          <input type="hidden" name="action" value="update_profile">
-                          <input type="hidden" name="semail" value="<?php echo htmlspecialchars($p['semail']); ?>">
-                          <input type="hidden" name="bio" value="<?php echo htmlspecialchars($p['bio'] ?? ''); ?>">
-                          <button type="submit" class="btn btn-primary" style="padding:0.25rem 0.5rem; font-size:0.8rem;">Save</button>
-                        </form>
-                      </td>
-                    </tr>
-                  <?php endforeach; endif; ?>
-                </tbody>
-              </table>
-            </div>
-          <?php endif; ?>
-        </div>
-      </div>
+
     </section>
   </main>
 

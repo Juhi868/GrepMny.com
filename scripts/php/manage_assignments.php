@@ -22,12 +22,20 @@ if ($action === 'create_assignment') {
     $cid = filter_var($_POST['cid'] ?? '', FILTER_VALIDATE_INT);
     $title = clean_string($_POST['title'] ?? '', 255);
     $description = clean_string($_POST['description'] ?? '', 5000);
-    $due_date = $_POST['due_date'] ?? '';
+    $due_date_input = clean_string($_POST['due_date'] ?? '', 32);
     $type = clean_string($_POST['type'] ?? 'Assignment', 50);
 
-    if (!$cid || !$title || !$due_date) {
+    if (!$cid || !$title || !$due_date_input) {
         redirect_with_status($dashboard_url, 'error', 'Course ID, title, and due date are required.');
     }
+
+    $due_date_obj = DateTime::createFromFormat('Y-m-d\TH:i', $due_date_input);
+    $due_date_errors = DateTime::getLastErrors();
+    if (!$due_date_obj || ($due_date_errors !== false && ($due_date_errors['warning_count'] > 0 || $due_date_errors['error_count'] > 0))) {
+        redirect_with_status($dashboard_url, 'error', 'Please choose a valid due date and time.');
+    }
+
+    $due_date = $due_date_obj->format('Y-m-d H:i:s');
 
     $stmt = $conn->prepare("INSERT INTO assignments (cid, title, description, due_date, type) VALUES (?, ?, ?, ?, ?)");
     $stmt->bind_param("issss", $cid, $title, $description, $due_date, $type);
@@ -45,8 +53,18 @@ if ($action === 'create_assignment') {
         redirect_with_status($dashboard_url, 'error', 'Invalid assignment ID.');
     }
 
-    $stmt = $conn->prepare("INSERT INTO student_assignments (assignment_id, semail, status, submitted_at) VALUES (?, ?, 'Submitted', NOW()) ON DUPLICATE KEY UPDATE status='Submitted', submitted_at=NOW()");
-    $stmt->bind_param("is", $assignment_id, $semail);
+    $existing_stmt = $conn->prepare("SELECT id FROM student_assignments WHERE assignment_id = ? AND semail = ? LIMIT 1");
+    $existing_stmt->bind_param("is", $assignment_id, $semail);
+    $existing_stmt->execute();
+    $existing_submission = $existing_stmt->get_result()->fetch_assoc();
+
+    if ($existing_submission) {
+        $stmt = $conn->prepare("UPDATE student_assignments SET status = 'Submitted', submitted_at = NOW() WHERE id = ?");
+        $stmt->bind_param("i", $existing_submission['id']);
+    } else {
+        $stmt = $conn->prepare("INSERT INTO student_assignments (assignment_id, semail, status, submitted_at) VALUES (?, ?, 'Submitted', NOW())");
+        $stmt->bind_param("is", $assignment_id, $semail);
+    }
 
     if ($stmt->execute()) {
         redirect_with_status($dashboard_url, 'success', 'Assignment submitted.');

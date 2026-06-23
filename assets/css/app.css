@@ -301,7 +301,7 @@ button:focus-visible {
 }
 
 .field {
-  display: grid;
+  display: block;
   gap: 0.45rem;
   margin-bottom: 1rem;
 }
@@ -317,7 +317,7 @@ button:focus-visible {
 
 .field input,
 .search-box input {
-  width: 100%;
+  width: 89%;
   min-height: 3rem;
   border: 1px solid var(--line);
   border-radius: var(--radius);

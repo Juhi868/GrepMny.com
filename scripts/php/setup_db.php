@@ -41,8 +41,8 @@ try {
     ];
 
     foreach ($seedUsers as $user) {
-        $stmt = $conn->prepare("SELECT email FROM `login` WHERE email = ?");
-        $stmt->bind_param("s", $user['email']);
+        $stmt = $conn->prepare("SELECT email, userid FROM `login` WHERE email = ? OR userid = ? LIMIT 1");
+        $stmt->bind_param("ss", $user['email'], $user['userid']);
         $stmt->execute();
         $res = $stmt->get_result();
         if ($res->num_rows === 0) {
@@ -51,11 +51,11 @@ try {
             $insert->execute();
             echo "Seeded user: {$user['email']} ({$user['role']})" . (php_sapi_name() === 'cli' ? "\n" : "<br>\n");
         } else {
-            // Update the role to make sure it matches
-            $update = $conn->prepare("UPDATE `login` SET role = ? WHERE email = ?");
-            $update->bind_param("ss", $user['role'], $user['email']);
+            $existing = $res->fetch_assoc();
+            $update = $conn->prepare("UPDATE `login` SET role = ? WHERE email = ? OR userid = ?");
+            $update->bind_param("sss", $user['role'], $existing['email'], $existing['userid']);
             $update->execute();
-            echo "Updated role for existing user: {$user['email']} to {$user['role']}" . (php_sapi_name() === 'cli' ? "\n" : "<br>\n");
+            echo "Updated role for existing user: {$existing['email']} to {$user['role']}" . (php_sapi_name() === 'cli' ? "\n" : "<br>\n");
         }
     }
 
@@ -64,10 +64,9 @@ try {
         "course_resources" => "CREATE TABLE IF NOT EXISTS `course_resources` (
             `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
             `cid` INT NOT NULL,
-            `teacher_email` VARCHAR(80) NOT NULL,
-            `resource_type` VARCHAR(10) NOT NULL,
-            `file_path` VARCHAR(255) NOT NULL,
-            `title` VARCHAR(100) NOT NULL,
+            `title` VARCHAR(255) NOT NULL,
+            `type` VARCHAR(50) NOT NULL,
+            `url` VARCHAR(2000) NOT NULL,
             `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             PRIMARY KEY (`id`),
             KEY `idx_cr_cid` (`cid`)
@@ -76,10 +75,10 @@ try {
         "assignments" => "CREATE TABLE IF NOT EXISTS `assignments` (
             `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
             `cid` INT NOT NULL,
-            `teacher_email` VARCHAR(80) NOT NULL,
-            `title` VARCHAR(100) NOT NULL,
-            `week_number` INT NOT NULL,
-            `due_date` DATE NOT NULL,
+            `title` VARCHAR(255) NOT NULL,
+            `description` TEXT,
+            `due_date` DATETIME NOT NULL,
+            `type` VARCHAR(50) NOT NULL DEFAULT 'Assignment',
             `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             PRIMARY KEY (`id`),
             KEY `idx_asn_cid` (`cid`)
@@ -102,9 +101,11 @@ try {
             `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
             `assignment_id` INT UNSIGNED NOT NULL,
             `semail` VARCHAR(80) NOT NULL,
-            `score` INT NOT NULL,
-            `total` INT NOT NULL,
-            `submitted_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            `status` VARCHAR(50) NOT NULL DEFAULT 'Pending',
+            `score` INT DEFAULT NULL,
+            `feedback` TEXT,
+            `submitted_at` TIMESTAMP NULL DEFAULT NULL,
+            `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             PRIMARY KEY (`id`),
             KEY `idx_sa_asn` (`assignment_id`),
             KEY `idx_sa_email` (`semail`)
@@ -151,6 +152,66 @@ try {
         echo "Created or verified '$name' table." . (php_sapi_name() === 'cli' ? "\n" : "<br>\n");
     }
 
+    $columnExists = static function (mysqli $conn, string $table, string $column): bool {
+        $database = $conn->query("SELECT DATABASE() AS db_name")->fetch_assoc()['db_name'];
+        $stmt = $conn->prepare("SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND COLUMN_NAME = ? LIMIT 1");
+        $stmt->bind_param("sss", $database, $table, $column);
+        $stmt->execute();
+        return $stmt->get_result()->num_rows > 0;
+    };
+
+    if (!$columnExists($conn, 'course_resources', 'type')) {
+        $conn->query("ALTER TABLE `course_resources` ADD COLUMN `type` VARCHAR(50) NOT NULL DEFAULT 'Link' AFTER `title`");
+        echo "Added 'type' column to 'course_resources' table." . (php_sapi_name() === 'cli' ? "\n" : "<br>\n");
+    }
+    if (!$columnExists($conn, 'course_resources', 'url')) {
+        $conn->query("ALTER TABLE `course_resources` ADD COLUMN `url` VARCHAR(2000) NOT NULL DEFAULT '' AFTER `type`");
+        echo "Added 'url' column to 'course_resources' table." . (php_sapi_name() === 'cli' ? "\n" : "<br>\n");
+    }
+    if ($columnExists($conn, 'course_resources', 'teacher_email')) {
+        $conn->query("ALTER TABLE `course_resources` MODIFY COLUMN `teacher_email` VARCHAR(80) NOT NULL DEFAULT ''");
+    }
+    if ($columnExists($conn, 'course_resources', 'resource_type')) {
+        $conn->query("ALTER TABLE `course_resources` MODIFY COLUMN `resource_type` VARCHAR(10) NOT NULL DEFAULT ''");
+    }
+    if ($columnExists($conn, 'course_resources', 'file_path')) {
+        $conn->query("ALTER TABLE `course_resources` MODIFY COLUMN `file_path` VARCHAR(255) NOT NULL DEFAULT ''");
+    }
+
+    if (!$columnExists($conn, 'assignments', 'description')) {
+        $conn->query("ALTER TABLE `assignments` ADD COLUMN `description` TEXT AFTER `title`");
+        echo "Added 'description' column to 'assignments' table." . (php_sapi_name() === 'cli' ? "\n" : "<br>\n");
+    }
+    if (!$columnExists($conn, 'assignments', 'type')) {
+        $conn->query("ALTER TABLE `assignments` ADD COLUMN `type` VARCHAR(50) NOT NULL DEFAULT 'Assignment' AFTER `due_date`");
+        echo "Added 'type' column to 'assignments' table." . (php_sapi_name() === 'cli' ? "\n" : "<br>\n");
+    }
+    if ($columnExists($conn, 'assignments', 'teacher_email')) {
+        $conn->query("ALTER TABLE `assignments` MODIFY COLUMN `teacher_email` VARCHAR(80) NOT NULL DEFAULT ''");
+    }
+    if ($columnExists($conn, 'assignments', 'week_number')) {
+        $conn->query("ALTER TABLE `assignments` MODIFY COLUMN `week_number` INT NOT NULL DEFAULT 0");
+    }
+    $conn->query("ALTER TABLE `assignments` MODIFY COLUMN `due_date` DATETIME NOT NULL");
+
+    if (!$columnExists($conn, 'student_assignments', 'status')) {
+        $conn->query("ALTER TABLE `student_assignments` ADD COLUMN `status` VARCHAR(50) NOT NULL DEFAULT 'Pending' AFTER `semail`");
+        echo "Added 'status' column to 'student_assignments' table." . (php_sapi_name() === 'cli' ? "\n" : "<br>\n");
+    }
+    if (!$columnExists($conn, 'student_assignments', 'feedback')) {
+        $conn->query("ALTER TABLE `student_assignments` ADD COLUMN `feedback` TEXT AFTER `score`");
+        echo "Added 'feedback' column to 'student_assignments' table." . (php_sapi_name() === 'cli' ? "\n" : "<br>\n");
+    }
+    if (!$columnExists($conn, 'student_assignments', 'created_at')) {
+        $conn->query("ALTER TABLE `student_assignments` ADD COLUMN `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP");
+        echo "Added 'created_at' column to 'student_assignments' table." . (php_sapi_name() === 'cli' ? "\n" : "<br>\n");
+    }
+    $conn->query("ALTER TABLE `student_assignments` MODIFY COLUMN `score` INT DEFAULT NULL");
+    if ($columnExists($conn, 'student_assignments', 'total')) {
+        $conn->query("ALTER TABLE `student_assignments` MODIFY COLUMN `total` INT DEFAULT 0");
+    }
+    $conn->query("ALTER TABLE `student_assignments` MODIFY COLUMN `submitted_at` TIMESTAMP NULL DEFAULT NULL");
+
     // 4. Seed mock courses and teacher assignments
     $mockTeachers = [
         ['email' => 'teacher@GrepMny.com', 'cid' => 101, 'cname' => 'Data Analytics'],
@@ -170,6 +231,15 @@ try {
         }
     }
 
+    $studentSeedEmail = 'student@GrepMny.com';
+    $studentSeedStmt = $conn->prepare("SELECT email FROM `login` WHERE userid = ? OR email = ? ORDER BY email = ? DESC LIMIT 1");
+    $studentSeedUserid = 'student';
+    $studentSeedStmt->bind_param("sss", $studentSeedUserid, $studentSeedEmail, $studentSeedEmail);
+    $studentSeedStmt->execute();
+    if ($studentSeedRow = $studentSeedStmt->get_result()->fetch_assoc()) {
+        $studentSeedEmail = $studentSeedRow['email'];
+    }
+
     // 5. Seed student details
     $mockStudents = [
         ['sname' => 'Riya Sharma', 'semail' => 'riya@example.com', 'cid' => 101, 'cname' => 'Data Analytics', 'duration' => '12 weeks', 'start_date' => '2026-06-01', 'end_date' => '2026-08-24', 'fees' => 12000],
@@ -177,8 +247,8 @@ try {
         ['sname' => 'Maya Rao', 'semail' => 'maya@example.com', 'cid' => 103, 'cname' => 'UX Research', 'duration' => '6 weeks', 'start_date' => '2026-07-01', 'end_date' => '2026-08-12', 'fees' => 7500],
         ['sname' => 'Dev Patel', 'semail' => 'dev@example.com', 'cid' => 104, 'cname' => 'Cloud Security', 'duration' => '10 weeks', 'start_date' => '2026-06-01', 'end_date' => '2026-08-10', 'fees' => 14500],
         ['sname' => 'Sara Khan', 'semail' => 'sara@example.com', 'cid' => 101, 'cname' => 'Data Analytics', 'duration' => '12 weeks', 'start_date' => '2026-06-01', 'end_date' => '2026-08-24', 'fees' => 12000],
-        ['sname' => 'Rahul Kumar', 'semail' => 'student@GrepMny.com', 'cid' => 101, 'cname' => 'Data Analytics', 'duration' => '12 weeks', 'start_date' => '2026-06-01', 'end_date' => '2026-08-24', 'fees' => 12000],
-        ['sname' => 'Rahul Kumar', 'semail' => 'student@GrepMny.com', 'cid' => 102, 'cname' => 'Python Foundations', 'duration' => '8 weeks', 'start_date' => '2026-06-15', 'end_date' => '2026-08-10', 'fees' => 9000],
+        ['sname' => 'Rahul Kumar', 'semail' => $studentSeedEmail, 'cid' => 101, 'cname' => 'Data Analytics', 'duration' => '12 weeks', 'start_date' => '2026-06-01', 'end_date' => '2026-08-24', 'fees' => 12000],
+        ['sname' => 'Rahul Kumar', 'semail' => $studentSeedEmail, 'cid' => 102, 'cname' => 'Python Foundations', 'duration' => '8 weeks', 'start_date' => '2026-06-15', 'end_date' => '2026-08-10', 'fees' => 9000],
     ];
 
     foreach ($mockStudents as $student) {

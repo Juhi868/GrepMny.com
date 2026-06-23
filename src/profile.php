@@ -184,7 +184,6 @@ if ($role === 'student') {
     <?php endif; ?>
 
     <div style="margin-bottom: 3rem; padding: 2rem; border: 1px solid #fca5a5; border-radius: var(--radius); background: #fef2f2;">
-      <h2 style="margin:0 0 0.5rem 0; color:#b91c1c;">Danger Zone</h2>
       <p style="margin:0 0 1.5rem 0; color:#991b1b;">Permanently delete your account and all associated data. This action cannot be undone.</p>
       <form action="../scripts/php/delete_account.php" method="post" onsubmit="return confirm('Are you completely sure you want to delete your account? This is irreversible.');">
         <button type="submit" class="btn btn-danger" style="padding: 0.5rem 1rem; font-size: 1rem; cursor: pointer; border-radius: var(--radius);">Delete Account</button>

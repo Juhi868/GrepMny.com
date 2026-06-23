@@ -20,9 +20,9 @@ try {
 
 if ($action === 'add_gap') {
     $semail = clean_string($_POST['semail'] ?? '', 80);
-    
-    if (($_SESSION['role'] ?? '') === 'student' && $semail !== $_SESSION['username']) {
-        redirect_with_status($dashboard_url, 'error', 'You can only record gaps for your own account.');
+
+    if (($_SESSION['role'] ?? '') === 'student') {
+        $semail = $_SESSION['username'];
     }
     
     $start_date = $_POST['start_date'] ?? '';
@@ -31,6 +31,10 @@ if ($action === 'add_gap') {
 
     if (!$semail || !$start_date || !$end_date) {
         redirect_with_status($dashboard_url, 'error', 'Student email, start date, and end date are required.');
+    }
+
+    if ($end_date < $start_date) {
+        redirect_with_status($dashboard_url, 'error', 'End date must be the same as or later than the start date.');
     }
 
     $stmt = $conn->prepare("INSERT INTO student_gaps (semail, start_date, end_date, reason) VALUES (?, ?, ?, ?)");
