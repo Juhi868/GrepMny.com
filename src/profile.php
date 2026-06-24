@@ -9,18 +9,17 @@ if (!isset($_SESSION['username'])) {
 }
 
 $username = $_SESSION['username'];
-$userid = $_SESSION['userid'];
+$userid = $_SESSION['userid'] ?? '';
 $role = $_SESSION['role'] ?? 'student';
+$displayName = $userid ?: $username;
+$nameParts = preg_split('/[\s._@-]+/', $displayName, -1, PREG_SPLIT_NO_EMPTY);
+$initials = strtoupper(substr($nameParts[0] ?? 'U', 0, 1) . substr($nameParts[1] ?? ($nameParts[0] ?? 'U'), 0, 1));
 
 try {
     $conn = db();
 } catch (Exception $e) {
     die("Database connection failed: " . htmlspecialchars($e->getMessage()));
 }
-
-// Fetch Profile Photo
-$photo_path = '../media/profiles/' . $userid . '.jpg';
-$photo_url = file_exists(__DIR__ . '/' . $photo_path) ? $photo_path . '?v=' . time() : 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="5"/><path d="M20 21a8 8 0 1 0-16 0"/></svg>';
 
 // Data fetching
 $my_courses = [];
@@ -56,139 +55,451 @@ if ($role === 'student') {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>GrepMny | Profile</title>
+  <script>
+    const root = document.documentElement;
+    const storedTheme = localStorage.getItem("GrepMny-theme");
+    const preferredDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+    root.dataset.theme = storedTheme || (preferredDark ? "dark" : "light");
+  </script>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
   <link href="../assets/css/app.css" rel="stylesheet">
   <style>
-    .profile-header {
+    html[data-page="profile"] {
+      --card: var(--surface-strong);
+      --card-subtle: var(--surface);
+      --line-strong: color-mix(in srgb, var(--line) 72%, var(--text));
+      --green-bg: #d7fbe1;
+      --green-text: #05603a;
+      --yellow-bg: var(--accent-soft);
+      --yellow-text: var(--accent);
+      --red-bg: color-mix(in srgb, var(--danger) 14%, var(--surface-strong));
+      --red-text: var(--danger);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--bg);
+      color: var(--text);
+      font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    a {
+      color: inherit;
+      text-decoration: none;
+    }
+
+    .profile-nav {
+      background: var(--card);
+      border-bottom: 0.5px solid var(--line);
+    }
+
+    .nav-inner,
+    .profile-shell {
+      width: min(1080px, calc(100% - 2rem));
+      margin: 0 auto;
+    }
+
+    .nav-inner {
+      min-height: 72px;
       display: flex;
-      gap: 2rem;
       align-items: center;
-      padding: 2rem;
-      background: var(--surface);
+      justify-content: space-between;
+      gap: 1.5rem;
+    }
+
+    .brand {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.75rem;
+      font-weight: 800;
+    }
+
+    .brand-mark {
+      width: 36px;
+      height: 36px;
+      border: 0.5px solid var(--line);
       border-radius: var(--radius);
-      box-shadow: 0 4px 6px rgba(0,0,0,0.05);
-      margin-bottom: 2rem;
+      display: grid;
+      place-items: center;
+      background: var(--card-subtle);
+      font-size: 0.8rem;
     }
-    .profile-photo {
-      width: 120px;
-      height: 120px;
-      border-radius: 50%;
-      object-fit: cover;
-      background: var(--line);
-      border: 3px solid var(--primary);
-    }
-    .profile-info h1 {
-      margin: 0 0 0.5rem 0;
-      font-size: 1.75rem;
-    }
-    .profile-info p {
-      margin: 0 0 0.25rem 0;
-      color: var(--muted);
-    }
-    .photo-upload-form {
-      margin-top: 1rem;
+
+    .nav-actions {
       display: flex;
-      flex-direction: column;
-      gap: 0.5rem;
+      align-items: center;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+      justify-content: flex-end;
     }
-    .section-title {
-      border-bottom: 2px solid var(--line);
-      padding-bottom: 0.5rem;
-      margin-bottom: 1.5rem;
+
+    .profile-shell {
+      display: grid;
+      gap: 2rem;
+      padding: 2rem 0;
     }
+
+    .card {
+      background: var(--card);
+      border: 0.5px solid var(--line);
+      border-radius: var(--radius);
+      padding: 1.5rem;
+    }
+
+    .section-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      margin-bottom: 1rem;
+    }
+
+    .section-head h2,
+    .profile-copy h1 {
+      margin: 0;
+      letter-spacing: 0;
+    }
+
+    .section-head h2 {
+      font-size: 1.1rem;
+    }
+
+    .profile-card {
+      display: flex;
+      align-items: center;
+      gap: 1.25rem;
+    }
+
+    .avatar {
+      width: 80px;
+      height: 80px;
+      border-radius: 50%;
+      border: 0.5px solid var(--line-strong);
+      display: grid;
+      place-items: center;
+      background: var(--card-subtle);
+      color: var(--text);
+      font-size: 1.35rem;
+      font-weight: 900;
+      flex: 0 0 auto;
+    }
+
+    .profile-copy {
+      min-width: 0;
+    }
+
+    .profile-copy h1 {
+      font-size: 1.45rem;
+      line-height: 1.2;
+      overflow-wrap: anywhere;
+    }
+
+    .profile-copy p,
+    .muted {
+      margin: 0.35rem 0 0;
+      color: var(--muted);
+      font-size: 0.92rem;
+    }
+
+    .meta-row {
+      display: flex;
+      gap: 0.6rem;
+      flex-wrap: wrap;
+      margin-top: 0.75rem;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      min-height: 1.6rem;
+      padding: 0.2rem 0.55rem;
+      border-radius: 999px;
+      font-size: 0.76rem;
+      font-weight: 800;
+      text-transform: capitalize;
+    }
+
+    .badge-green { background: var(--green-bg); color: var(--green-text); }
+    .badge-yellow { background: var(--yellow-bg); color: var(--yellow-text); }
+    .badge-red { background: var(--red-bg); color: var(--red-text); }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.45rem;
+      min-height: 2.4rem;
+      padding: 0.55rem 0.85rem;
+      border: 0.5px solid var(--line-strong);
+      border-radius: var(--radius);
+      background: var(--card-subtle);
+      color: var(--text);
+      font: inherit;
+      font-size: 0.9rem;
+      font-weight: 800;
+      cursor: pointer;
+    }
+
     .btn-danger {
-      background: #e11d48;
-      color: white;
-      border: none;
+      border-color: rgba(153, 27, 27, 0.35);
+      color: var(--red-text);
+      background: var(--card-subtle);
     }
-    .btn-danger:hover {
-      background: #be123c;
+
+    .icon {
+      width: 18px;
+      height: 18px;
+      stroke: currentColor;
+      stroke-width: 2;
+      fill: none;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      flex: 0 0 auto;
+    }
+
+    .icon-sm {
+      width: 14px;
+      height: 14px;
+    }
+
+    .course-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+      gap: 1rem;
+    }
+
+    .course-card {
+      border: 0.5px solid var(--line);
+      border-radius: var(--radius);
+      padding: 1rem;
+      background: var(--card-subtle);
+    }
+
+    .course-card h3 {
+      margin: 0;
+      font-size: 1rem;
+      line-height: 1.35;
+    }
+
+    .course-meta {
+      display: grid;
+      gap: 0.45rem;
+      margin-top: 0.9rem;
+      color: var(--muted);
+      font-size: 0.85rem;
+    }
+
+    .table-wrap {
+      overflow-x: auto;
+      border: 0.5px solid var(--line);
+      border-radius: var(--radius);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 640px;
+      background: var(--card);
+      text-align: left;
+    }
+
+    th,
+    td {
+      padding: 0.85rem 1rem;
+      border-bottom: 0.5px solid var(--line);
+      font-size: 0.9rem;
+      vertical-align: middle;
+    }
+
+    th {
+      color: var(--muted);
+      font-size: 0.78rem;
+      text-transform: uppercase;
+      font-weight: 900;
+    }
+
+    tbody tr:last-child td {
+      border-bottom: 0;
+    }
+
+    .empty {
+      margin: 0;
+      color: var(--muted);
+      border: 0.5px dashed var(--line-strong);
+      border-radius: var(--radius);
+      padding: 1rem;
+      background: var(--card-subtle);
+    }
+
+    .danger-card {
+      border-color: rgba(153, 27, 27, 0.3);
+    }
+
+    .danger-card p {
+      margin: 0;
+      color: var(--red-text);
+    }
+
+    .danger-actions {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    @media (max-width: 640px) {
+      .nav-inner,
+      .profile-card,
+      .danger-actions {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+
+      .nav-actions {
+        justify-content: flex-start;
+      }
     }
   </style>
 </head>
 <body>
-  <header class="site-header">
-    <nav class="nav-wrap">
-      <a class="brand-mark" href="./dashboard.php">
-        <span>GM</span>
-        <strong>GrepMny</strong>
+  <?php
+    function tabler_icon(string $name, string $class = 'icon'): string
+    {
+        $icons = [
+            'dashboard' => '<path d="M4 4h6v8h-6z"/><path d="M14 4h6v4h-6z"/><path d="M14 12h6v8h-6z"/><path d="M4 16h6v4h-6z"/>',
+            'logout' => '<path d="M14 8v-2a2 2 0 0 0 -2 -2h-7a2 2 0 0 0 -2 2v12a2 2 0 0 0 2 2h7a2 2 0 0 0 2 -2v-2"/><path d="M9 12h12l-3 -3"/><path d="M18 15l3 -3"/>',
+            'book' => '<path d="M3 19a9 9 0 0 1 9 0a9 9 0 0 1 9 0"/><path d="M3 6a9 9 0 0 1 9 0a9 9 0 0 1 9 0"/><path d="M3 6v13"/><path d="M12 6v13"/><path d="M21 6v13"/>',
+            'chart' => '<path d="M3 3v18h18"/><path d="M7 16l4 -4l4 3l5 -7"/>',
+            'trash' => '<path d="M4 7h16"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2 -2l1 -12"/><path d="M9 7v-3h6v3"/>',
+            'calendar' => '<path d="M4 7h16"/><path d="M10 3v4"/><path d="M14 3v4"/><path d="M5 5h14v16h-14z"/>',
+            'shield' => '<path d="M12 3l8 4v5c0 5 -3.5 8 -8 9c-4.5 -1 -8 -4 -8 -9v-5z"/>',
+        ];
+
+        return '<svg class="' . $class . '" viewBox="0 0 24 24" aria-hidden="true">' . ($icons[$name] ?? '') . '</svg>';
+    }
+  ?>
+
+  <header class="profile-nav">
+    <nav class="nav-inner" aria-label="Profile navigation">
+      <a class="brand" href="./dashboard.php">
+        <span class="brand-mark">GM</span>
+        <span>GrepMny</span>
       </a>
-      <div class="site-menu always-visible">
-        <a href="./dashboard.php">Dashboard</a>
-        <a href="../scripts/php/logout.php" style="color:var(--danger)">Sign Out</a>
+      <div class="nav-actions">
+        <a class="btn" href="./dashboard.php"><?php echo tabler_icon('dashboard', 'icon icon-sm'); ?>Dashboard</a>
+        <a class="btn" href="../scripts/php/logout.php"><?php echo tabler_icon('logout', 'icon icon-sm'); ?>Sign Out</a>
+        <button class="theme-toggle" type="button" aria-label="Toggle dark mode" data-theme-toggle></button>
       </div>
-      <button class="theme-toggle" type="button" aria-label="Toggle dark mode" data-theme-toggle></button>
     </nav>
   </header>
 
-  <main style="max-width: 900px; margin: 3rem auto; padding: 0 1rem;">
-    <div class="profile-header">
-      <div>
-        <img src="<?php echo $photo_url; ?>" alt="Profile Photo" class="profile-photo">
-        <form action="../scripts/php/upload_photo.php" method="post" enctype="multipart/form-data" class="photo-upload-form">
-          <input type="file" name="profile_photo" accept="image/*" required style="font-size: 0.8rem; width: 180px;">
-          <button type="submit" class="btn btn-secondary" style="padding: 0.25rem 0.5rem; font-size: 0.8rem;">Update Photo</button>
-        </form>
+  <main class="profile-shell">
+    <section class="card profile-card" aria-labelledby="profile-title">
+      <div class="avatar" aria-hidden="true"><?php echo htmlspecialchars($initials); ?></div>
+      <div class="profile-copy">
+        <h1 id="profile-title"><?php echo htmlspecialchars($displayName); ?></h1>
+        <p><?php echo htmlspecialchars($username); ?></p>
+        <div class="meta-row">
+          <span class="badge badge-green"><?php echo htmlspecialchars($role); ?></span>
+          <span class="badge badge-yellow"><?php echo tabler_icon('shield', 'icon icon-sm'); ?>ID: <?php echo htmlspecialchars($userid); ?></span>
+        </div>
       </div>
-      <div class="profile-info">
-        <h1><?php echo htmlspecialchars($username); ?></h1>
-        <p><strong>User ID:</strong> <?php echo htmlspecialchars($userid); ?></p>
-        <p><strong>Role:</strong> <span style="text-transform: capitalize;"><?php echo htmlspecialchars($role); ?></span></p>
-      </div>
-    </div>
+    </section>
 
     <?php if ($role === 'student'): ?>
-    <div style="margin-bottom: 3rem;">
-      <h2 class="section-title">My Courses</h2>
+    <section class="card" aria-labelledby="courses-title">
+      <div class="section-head">
+        <h2 id="courses-title"><?php echo tabler_icon('book'); ?> Courses</h2>
+      </div>
       <?php if (empty($my_courses)): ?>
-        <p style="color:var(--muted)">You are not enrolled in any courses.</p>
+        <p class="empty">You are not enrolled in any courses.</p>
       <?php else: ?>
-        <div style="display:grid; gap:1rem; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));">
+        <div class="course-grid">
           <?php foreach ($my_courses as $c): ?>
-            <div style="padding:1rem; border:1px solid var(--line); border-radius:var(--radius); background:var(--surface);">
-              <h3 style="margin:0 0 0.5rem 0; font-size:1.1rem;"><?php echo htmlspecialchars($c['cname']); ?> (<?php echo $c['cid']; ?>)</h3>
-              <p style="margin:0; font-size:0.9rem; color:var(--muted);">Started: <?php echo htmlspecialchars($c['start_date']); ?></p>
-            </div>
+            <?php
+              $today = date('Y-m-d');
+              if ($today < $c['start_date']) {
+                  $courseStatus = 'Upcoming';
+                  $courseBadge = 'badge-yellow';
+              } elseif ($today > $c['end_date']) {
+                  $courseStatus = 'Completed';
+                  $courseBadge = 'badge-green';
+              } else {
+                  $courseStatus = 'Active';
+                  $courseBadge = 'badge-green';
+              }
+            ?>
+            <article class="course-card">
+              <h3><?php echo htmlspecialchars($c['cname']); ?></h3>
+              <div class="meta-row">
+                <span class="badge <?php echo $courseBadge; ?>"><?php echo $courseStatus; ?></span>
+                <span class="badge badge-yellow">CID <?php echo htmlspecialchars((string) $c['cid']); ?></span>
+              </div>
+              <div class="course-meta">
+                <span><?php echo tabler_icon('calendar', 'icon icon-sm'); ?> <?php echo htmlspecialchars($c['start_date']); ?> to <?php echo htmlspecialchars($c['end_date']); ?></span>
+                <span><?php echo htmlspecialchars($c['duration']); ?> · ₹<?php echo number_format((float) $c['fees']); ?></span>
+              </div>
+            </article>
           <?php endforeach; ?>
         </div>
       <?php endif; ?>
-    </div>
+    </section>
 
-    <div style="margin-bottom: 3rem;">
-      <h2 class="section-title">Progress Report</h2>
+    <section class="card" aria-labelledby="progress-title">
+      <div class="section-head">
+        <h2 id="progress-title"><?php echo tabler_icon('chart'); ?> Progress</h2>
+      </div>
       <?php if (empty($my_assignments)): ?>
-        <p style="color:var(--muted)">No progress data available.</p>
+        <p class="empty">No progress data available.</p>
       <?php else: ?>
-        <table style="width:100%; border-collapse:collapse; text-align:left;">
-          <thead>
-            <tr style="border-bottom:2px solid var(--line);">
-              <th style="padding:0.5rem;">Assignment</th>
-              <th style="padding:0.5rem;">Due Date</th>
-              <th style="padding:0.5rem;">Status</th>
-              <th style="padding:0.5rem;">Score</th>
-            </tr>
-          </thead>
-          <tbody>
-            <?php foreach ($my_assignments as $a): ?>
-            <tr style="border-bottom:1px solid var(--line);">
-              <td style="padding:0.5rem;"><strong><?php echo htmlspecialchars($a['title']); ?></strong></td>
-              <td style="padding:0.5rem;"><?php echo htmlspecialchars($a['due_date']); ?></td>
-              <td style="padding:0.5rem;"><?php echo htmlspecialchars($a['status'] ?? 'Pending'); ?></td>
-              <td style="padding:0.5rem; font-weight:bold;"><?php echo $a['score'] !== null ? htmlspecialchars((string)$a['score']) . '/100' : '-'; ?></td>
-            </tr>
-            <?php endforeach; ?>
-          </tbody>
-        </table>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Assignment</th>
+                <th>Due Date</th>
+                <th>Status</th>
+                <th>Score</th>
+              </tr>
+            </thead>
+            <tbody>
+              <?php foreach ($my_assignments as $a): ?>
+              <?php
+                $status = $a['status'] ?? 'Pending';
+                $statusClass = $status === 'Graded' ? 'badge-green' : ($status === 'Submitted' ? 'badge-yellow' : 'badge-red');
+              ?>
+              <tr>
+                <td><strong><?php echo htmlspecialchars($a['title']); ?></strong></td>
+                <td><?php echo htmlspecialchars($a['due_date']); ?></td>
+                <td><span class="badge <?php echo $statusClass; ?>"><?php echo htmlspecialchars($status); ?></span></td>
+                <td><strong><?php echo $a['score'] !== null ? htmlspecialchars((string) $a['score']) . '/100' : '-'; ?></strong></td>
+              </tr>
+              <?php endforeach; ?>
+            </tbody>
+          </table>
+        </div>
       <?php endif; ?>
-    </div>
+    </section>
     <?php endif; ?>
 
-    <div style="margin-bottom: 3rem; padding: 2rem; border: 1px solid #fca5a5; border-radius: var(--radius); background: #fef2f2;">
-      <p style="margin:0 0 1.5rem 0; color:#991b1b;">Permanently delete your account and all associated data. This action cannot be undone.</p>
+    <section class="card danger-card" aria-labelledby="delete-title">
+      <div class="danger-actions">
+        <div>
+          <div class="section-head" style="margin-bottom:0.4rem;">
+            <h2 id="delete-title"><?php echo tabler_icon('trash'); ?> Delete</h2>
+          </div>
+          <p>Permanently delete your account and all associated data. This action cannot be undone.</p>
+        </div>
       <form action="../scripts/php/delete_account.php" method="post" onsubmit="return confirm('Are you completely sure you want to delete your account? This is irreversible.');">
-        <button type="submit" class="btn btn-danger" style="padding: 0.5rem 1rem; font-size: 1rem; cursor: pointer; border-radius: var(--radius);">Delete Account</button>
+          <button type="submit" class="btn btn-danger"><?php echo tabler_icon('trash', 'icon icon-sm'); ?>Delete Account</button>
       </form>
-    </div>
+      </div>
+    </section>
   </main>
   <script src="../assets/js/app.js" defer></script>
 </body>

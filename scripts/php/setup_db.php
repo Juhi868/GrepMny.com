@@ -116,6 +116,13 @@ try {
             `cid` INT NOT NULL,
             `teacher_email` VARCHAR(80) NOT NULL,
             `title` VARCHAR(100) NOT NULL,
+            `description` TEXT,
+            `batch_name` VARCHAR(80) NOT NULL DEFAULT '',
+            `assigned_students` TEXT,
+            `starts_at` DATETIME NULL DEFAULT NULL,
+            `ends_at` DATETIME NULL DEFAULT NULL,
+            `duration_minutes` INT NOT NULL DEFAULT 30,
+            `pass_percentage` INT NOT NULL DEFAULT 40,
             `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             PRIMARY KEY (`id`),
             KEY `idx_mt_cid` (`cid`)
@@ -124,12 +131,14 @@ try {
         "mock_test_questions" => "CREATE TABLE IF NOT EXISTS `mock_test_questions` (
             `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
             `test_id` INT UNSIGNED NOT NULL,
+            `question_type` VARCHAR(30) NOT NULL DEFAULT 'mcq',
             `question_text` TEXT NOT NULL,
-            `option_a` VARCHAR(255) NOT NULL,
-            `option_b` VARCHAR(255) NOT NULL,
-            `option_c` VARCHAR(255) NOT NULL,
-            `option_d` VARCHAR(255) NOT NULL,
-            `correct_option` CHAR(1) NOT NULL,
+            `option_a` VARCHAR(255) NOT NULL DEFAULT '',
+            `option_b` VARCHAR(255) NOT NULL DEFAULT '',
+            `option_c` VARCHAR(255) NOT NULL DEFAULT '',
+            `option_d` VARCHAR(255) NOT NULL DEFAULT '',
+            `correct_option` VARCHAR(255) NOT NULL DEFAULT '',
+            `marks` INT NOT NULL DEFAULT 1,
             PRIMARY KEY (`id`),
             KEY `idx_mtq_test` (`test_id`)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
@@ -138,12 +147,28 @@ try {
             `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
             `test_id` INT UNSIGNED NOT NULL,
             `semail` VARCHAR(80) NOT NULL,
-            `score` INT NOT NULL,
-            `total` INT NOT NULL,
+            `score` DECIMAL(8,2) NOT NULL DEFAULT 0,
+            `total` INT NOT NULL DEFAULT 0,
+            `status` VARCHAR(30) NOT NULL DEFAULT 'Submitted',
+            `feedback` TEXT,
             `submitted_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             PRIMARY KEY (`id`),
             KEY `idx_mtr_test` (`test_id`),
             KEY `idx_mtr_email` (`semail`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+
+        "mock_test_answers" => "CREATE TABLE IF NOT EXISTS `mock_test_answers` (
+            `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
+            `result_id` INT UNSIGNED NOT NULL,
+            `question_id` INT UNSIGNED NOT NULL,
+            `answer_text` TEXT,
+            `is_correct` TINYINT(1) DEFAULT NULL,
+            `marks_awarded` DECIMAL(8,2) NOT NULL DEFAULT 0,
+            `teacher_feedback` TEXT,
+            `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (`id`),
+            KEY `idx_mta_result` (`result_id`),
+            KEY `idx_mta_question` (`question_id`)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
     ];
 
@@ -159,6 +184,32 @@ try {
         $stmt->execute();
         return $stmt->get_result()->num_rows > 0;
     };
+
+    $addColumnIfMissing = static function (mysqli $conn, string $table, string $column, string $definition) use ($columnExists): void {
+        if (!$columnExists($conn, $table, $column)) {
+            $conn->query("ALTER TABLE `$table` ADD COLUMN $definition");
+            echo "Added '$column' column to '$table' table." . (php_sapi_name() === 'cli' ? "\n" : "<br>\n");
+        }
+    };
+
+    $addColumnIfMissing($conn, 'mock_tests', 'description', '`description` TEXT AFTER `title`');
+    $addColumnIfMissing($conn, 'mock_tests', 'batch_name', "`batch_name` VARCHAR(80) NOT NULL DEFAULT '' AFTER `description`");
+    $addColumnIfMissing($conn, 'mock_tests', 'assigned_students', '`assigned_students` TEXT AFTER `batch_name`');
+    $addColumnIfMissing($conn, 'mock_tests', 'starts_at', '`starts_at` DATETIME NULL DEFAULT NULL AFTER `assigned_students`');
+    $addColumnIfMissing($conn, 'mock_tests', 'ends_at', '`ends_at` DATETIME NULL DEFAULT NULL AFTER `starts_at`');
+    $addColumnIfMissing($conn, 'mock_tests', 'duration_minutes', '`duration_minutes` INT NOT NULL DEFAULT 30 AFTER `ends_at`');
+    $addColumnIfMissing($conn, 'mock_tests', 'pass_percentage', '`pass_percentage` INT NOT NULL DEFAULT 40 AFTER `duration_minutes`');
+    $addColumnIfMissing($conn, 'mock_test_questions', 'question_type', "`question_type` VARCHAR(30) NOT NULL DEFAULT 'mcq' AFTER `test_id`");
+    $addColumnIfMissing($conn, 'mock_test_questions', 'marks', '`marks` INT NOT NULL DEFAULT 1 AFTER `correct_option`');
+    $addColumnIfMissing($conn, 'mock_test_results', 'status', "`status` VARCHAR(30) NOT NULL DEFAULT 'Submitted' AFTER `total`");
+    $addColumnIfMissing($conn, 'mock_test_results', 'feedback', '`feedback` TEXT AFTER `status`');
+    $conn->query("ALTER TABLE `mock_test_results` MODIFY COLUMN `score` DECIMAL(8,2) NOT NULL DEFAULT 0");
+    $conn->query("ALTER TABLE `mock_test_results` MODIFY COLUMN `total` INT NOT NULL DEFAULT 0");
+    $conn->query("ALTER TABLE `mock_test_questions` MODIFY COLUMN `option_a` VARCHAR(255) NOT NULL DEFAULT ''");
+    $conn->query("ALTER TABLE `mock_test_questions` MODIFY COLUMN `option_b` VARCHAR(255) NOT NULL DEFAULT ''");
+    $conn->query("ALTER TABLE `mock_test_questions` MODIFY COLUMN `option_c` VARCHAR(255) NOT NULL DEFAULT ''");
+    $conn->query("ALTER TABLE `mock_test_questions` MODIFY COLUMN `option_d` VARCHAR(255) NOT NULL DEFAULT ''");
+    $conn->query("ALTER TABLE `mock_test_questions` MODIFY COLUMN `correct_option` VARCHAR(255) NOT NULL DEFAULT ''");
 
     if (!$columnExists($conn, 'course_resources', 'type')) {
         $conn->query("ALTER TABLE `course_resources` ADD COLUMN `type` VARCHAR(50) NOT NULL DEFAULT 'Link' AFTER `title`");

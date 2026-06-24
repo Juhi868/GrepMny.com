@@ -137,16 +137,29 @@ if ($role === 'superadmin' || $role === 'admin') {
 
 // NEW FEATURES DATA FETCHING
 $all_resources = [];
-$all_assignments = [];
+$all_tests = [];
+$test_summary = ['total' => 0, 'attempts' => 0, 'avg_score' => 0.0, 'pending_review' => 0];
 $all_gaps = [];
+$student_names = [];
+$student_display_name = $userid ?: $username;
+
+$student_names_query = $conn->query("SELECT semail, MAX(sname) as sname FROM `student details` GROUP BY semail");
+while ($row = $student_names_query->fetch_assoc()) {
+    if (!empty($row['semail']) && !empty($row['sname'])) {
+        $student_names[$row['semail']] = $row['sname'];
+    }
+}
+$student_display_name = $student_names[$username] ?? $student_display_name;
 
 
 if ($role === 'superadmin' || $role === 'admin') {
     $res_query = $conn->query("SELECT * FROM course_resources ORDER BY created_at DESC");
     while ($r = $res_query->fetch_assoc()) $all_resources[] = $r;
 
-    $asn_query = $conn->query("SELECT * FROM assignments ORDER BY due_date ASC");
-    while ($r = $asn_query->fetch_assoc()) $all_assignments[] = $r;
+    $test_query = $conn->query("SELECT mt.*, COUNT(DISTINCT r.id) AS attempts, AVG(CASE WHEN r.total > 0 THEN (r.score / r.total) * 100 END) AS avg_pct, SUM(CASE WHEN r.status = 'Pending Review' THEN 1 ELSE 0 END) AS pending_review FROM mock_tests mt LEFT JOIN mock_test_results r ON r.test_id = mt.id GROUP BY mt.id ORDER BY mt.created_at DESC");
+    while ($r = $test_query->fetch_assoc()) $all_tests[] = $r;
+    $summary_query = $conn->query("SELECT COUNT(DISTINCT mt.id) AS total, COUNT(r.id) AS attempts, AVG(CASE WHEN r.total > 0 THEN (r.score / r.total) * 100 END) AS avg_score, SUM(CASE WHEN r.status = 'Pending Review' THEN 1 ELSE 0 END) AS pending_review FROM mock_tests mt LEFT JOIN mock_test_results r ON r.test_id = mt.id");
+    $test_summary = array_merge($test_summary, $summary_query->fetch_assoc() ?: []);
 
     $gap_query = $conn->query("SELECT * FROM student_gaps ORDER BY start_date DESC");
     while ($r = $gap_query->fetch_assoc()) $all_gaps[] = $r;
@@ -157,16 +170,15 @@ if ($role === 'superadmin' || $role === 'admin') {
     $res_query = $conn->query("SELECT * FROM course_resources ORDER BY created_at DESC");
     while ($r = $res_query->fetch_assoc()) $all_resources[] = $r;
 
-    if (!empty($teacher_cids)) {
-        $in_clause = implode(',', array_fill(0, count($teacher_cids), '?'));
-        $types = str_repeat('i', count($teacher_cids));
-
-        $asn_stmt = $conn->prepare("SELECT * FROM assignments WHERE cid IN ($in_clause) ORDER BY due_date ASC");
-        $asn_stmt->bind_param($types, ...$teacher_cids);
-        $asn_stmt->execute();
-        $res = $asn_stmt->get_result();
-        while ($r = $res->fetch_assoc()) $all_assignments[] = $r;
-    }
+    $test_stmt = $conn->prepare("SELECT mt.*, COUNT(DISTINCT r.id) AS attempts, AVG(CASE WHEN r.total > 0 THEN (r.score / r.total) * 100 END) AS avg_pct, SUM(CASE WHEN r.status = 'Pending Review' THEN 1 ELSE 0 END) AS pending_review FROM mock_tests mt LEFT JOIN mock_test_results r ON r.test_id = mt.id WHERE mt.teacher_email = ? GROUP BY mt.id ORDER BY mt.created_at DESC");
+    $test_stmt->bind_param("s", $username);
+    $test_stmt->execute();
+    $test_res = $test_stmt->get_result();
+    while ($r = $test_res->fetch_assoc()) $all_tests[] = $r;
+    $summary_stmt = $conn->prepare("SELECT COUNT(DISTINCT mt.id) AS total, COUNT(r.id) AS attempts, AVG(CASE WHEN r.total > 0 THEN (r.score / r.total) * 100 END) AS avg_score, SUM(CASE WHEN r.status = 'Pending Review' THEN 1 ELSE 0 END) AS pending_review FROM mock_tests mt LEFT JOIN mock_test_results r ON r.test_id = mt.id WHERE mt.teacher_email = ?");
+    $summary_stmt->bind_param("s", $username);
+    $summary_stmt->execute();
+    $test_summary = array_merge($test_summary, $summary_stmt->get_result()->fetch_assoc() ?: []);
     
     // Gaps (all gaps visible to everyone)
     $gap_query = $conn->query("SELECT * FROM student_gaps ORDER BY start_date DESC");
@@ -183,14 +195,20 @@ if ($role === 'superadmin' || $role === 'admin') {
         $res = $res_stmt->get_result();
         while ($r = $res->fetch_assoc()) $all_resources[] = $r;
 
-        $asn_stmt = $conn->prepare("SELECT a.*, sa.status, sa.score, sa.feedback FROM assignments a LEFT JOIN student_assignments sa ON a.id = sa.assignment_id AND sa.semail = ? WHERE a.cid IN ($in_clause) ORDER BY a.due_date ASC");
-        // We need to pass semail then cids
-        $bind_params = array_merge([$username], $student_cids);
-        $bind_types = 's' . $types;
-        $asn_stmt->bind_param($bind_types, ...$bind_params);
-        $asn_stmt->execute();
-        $res = $asn_stmt->get_result();
-        while ($r = $res->fetch_assoc()) $all_assignments[] = $r;
+        $test_stmt = $conn->prepare("SELECT mt.*, mtr.score, mtr.total, mtr.status AS result_status, mtr.submitted_at,
+            (SELECT COUNT(*) + 1 FROM mock_test_results r2 WHERE r2.test_id = mt.id AND r2.score > COALESCE(mtr.score, -1)) AS student_rank,
+            (SELECT COUNT(*) FROM mock_test_results r3 WHERE r3.test_id = mt.id) AS attempts
+            FROM mock_tests mt
+            LEFT JOIN mock_test_results mtr ON mt.id = mtr.test_id AND mtr.semail = ?
+            WHERE mt.cid IN ($in_clause)
+            AND (mt.assigned_students IS NULL OR mt.assigned_students = '' OR FIND_IN_SET(?, REPLACE(mt.assigned_students, ' ', '')) > 0)
+            ORDER BY COALESCE(mt.starts_at, mt.created_at) DESC");
+        $test_bind_params = array_merge([$username], $student_cids, [$username]);
+        $test_bind_types = 's' . $types . 's';
+        $test_stmt->bind_param($test_bind_types, ...$test_bind_params);
+        $test_stmt->execute();
+        $test_res = $test_stmt->get_result();
+        while ($r = $test_res->fetch_assoc()) $all_tests[] = $r;
     }
 
     // Gaps (all gaps visible to everyone)
@@ -450,8 +468,6 @@ if ($role === 'superadmin' || $role === 'admin') {
       grid-template-columns:
         minmax(7rem, 0.7fr)
         minmax(12rem, 1.2fr)
-        minmax(9rem, 0.9fr)
-        minmax(14rem, 1.1fr)
         max-content;
     }
 
@@ -550,7 +566,7 @@ if ($role === 'superadmin' || $role === 'admin') {
           </button>
         <?php endif; ?>
         <button class="sidebar-link" data-tab-trigger="resources" role="tab" aria-selected="false">Course Resources</button>
-        <button class="sidebar-link" data-tab-trigger="assignments" role="tab" aria-selected="false">Assignments</button>
+        <button class="sidebar-link" data-tab-trigger="tests" role="tab" aria-selected="false">Tests</button>
         <button class="sidebar-link" data-tab-trigger="gaps" role="tab" aria-selected="false">Gap Tracking</button>
 
       </nav>
@@ -1185,16 +1201,25 @@ if ($role === 'superadmin' || $role === 'admin') {
       </div>
 
       <!-- ---------------------------------------------------- -->
-      <!-- ASSIGNMENTS TAB -->
+      <!-- TESTS TAB -->
       <!-- ---------------------------------------------------- -->
-      <div id="tab-assignments" class="tab-pane" role="tabpanel">
+      <div id="tab-tests" class="tab-pane" role="tabpanel">
         <div class="dashboard-card">
-          <h3>Assignments & Mock Tests</h3>
-          <p class="description">Create, submit, and grade assignments.</p>
+          <h3>Tests</h3>
+          <p class="description">Schedule tests, attempt assigned assessments, and review performance history.</p>
+
+          <?php if ($role !== 'student'): ?>
+            <div class="metric-grid" style="margin-bottom:1.5rem;">
+              <div class="metric-card"><strong><?php echo (int)($test_summary['total'] ?? 0); ?></strong><span>Total Tests</span></div>
+              <div class="metric-card"><strong><?php echo (int)($test_summary['attempts'] ?? 0); ?></strong><span>Student Attempts</span></div>
+              <div class="metric-card"><strong><?php echo round((float)($test_summary['avg_score'] ?? 0), 1); ?>%</strong><span>Average Score</span></div>
+              <div class="metric-card"><strong><?php echo (int)($test_summary['pending_review'] ?? 0); ?></strong><span>Pending Review</span></div>
+            </div>
+          <?php endif; ?>
 
           <?php if ($role === 'teacher'): ?>
-            <form action="../scripts/php/manage_assignments.php" method="post" class="form-row-grid assignment-form" style="margin-bottom:1.5rem; border-bottom:1px solid var(--line); padding-bottom:1.5rem;">
-              <input type="hidden" name="action" value="create_assignment">
+            <form action="../scripts/php/manage_mcq.php" method="post" class="form-row-grid assignment-form" style="margin-bottom:1.5rem; border-bottom:1px solid var(--line); padding-bottom:1.5rem;">
+              <input type="hidden" name="action" value="create_test">
               <label class="field compact">
                 <span>Course ID</span>
                 <input type="number" name="cid" required>
@@ -1203,15 +1228,32 @@ if ($role === 'superadmin' || $role === 'admin') {
                 <span>Title</span>
                 <input type="text" name="title" required>
               </label>
+
               <label class="field compact">
-                <span>Type</span>
-                <input type="text" name="type" value="Assignment" required>
+                <span>Starts At</span>
+                <input type="datetime-local" name="starts_at">
               </label>
               <label class="field compact">
-                <span>Due Date</span>
-                <input type="datetime-local" name="due_date" required>
+                <span>Ends At</span>
+                <input type="datetime-local" name="ends_at">
               </label>
-              <button class="btn btn-primary" type="submit">Create</button>
+              <label class="field compact">
+                <span>Duration</span>
+                <input type="number" name="duration_minutes" min="1" max="240" value="30" required>
+              </label>
+              <label class="field compact">
+                <span>Pass %</span>
+                <input type="number" name="pass_percentage" min="0" max="100" value="40" required>
+              </label>
+              <label class="field compact" style="grid-column:1 / -1;">
+                <span>Specific Student Emails</span>
+                <input type="text" name="assigned_students" placeholder="Comma-separated; leave blank for all students in course/batch">
+              </label>
+              <label class="field compact" style="grid-column:1 / -1;">
+                <span>Description</span>
+                <input type="text" name="description" placeholder="Instructions or syllabus focus">
+              </label>
+              <button class="btn btn-primary" type="submit">Create Test</button>
             </form>
           <?php endif; ?>
 
@@ -1220,62 +1262,76 @@ if ($role === 'superadmin' || $role === 'admin') {
               <thead>
                 <tr>
                   <th>Course ID</th>
-                  <th>Title & Type</th>
-                  <th>Due Date</th>
+                  <th>Test</th>
+                  <th>Schedule</th>
                   <?php if ($role === 'student'): ?>
-                    <th>Status / Score</th>
+                    <th>Result</th>
                     <th>Action</th>
                   <?php else: ?>
-                    <th>Submissions</th>
-                    <th>Manage MCQs</th>
+                    <th>Analytics</th>
+                    <th><?php echo $role === 'teacher' ? 'Manage' : 'Owner'; ?></th>
                   <?php endif; ?>
                 </tr>
               </thead>
               <tbody>
-                <?php if (empty($all_assignments)): ?>
-                  <tr><td colspan="5" style="text-align:center; color:var(--muted);">No assignments.</td></tr>
-                <?php else: foreach ($all_assignments as $a): ?>
+                <?php if (empty($all_tests)): ?>
+                  <tr><td colspan="5" style="text-align:center; color:var(--muted);">No tests.</td></tr>
+                <?php else: foreach ($all_tests as $test_item): ?>
                   <tr>
-                    <td><code><?php echo $a['cid']; ?></code></td>
-                    <td><strong><?php echo htmlspecialchars($a['title']); ?></strong><br><small><?php echo htmlspecialchars($a['type']); ?></small></td>
-                    <td><?php echo htmlspecialchars($a['due_date']); ?></td>
+                    <td><code><?php echo $test_item['cid']; ?></code></td>
+                    <td>
+                      <strong><?php echo htmlspecialchars($test_item['title']); ?></strong>
+
+                    </td>
+                    <td>
+                      <small>
+                        <?php echo htmlspecialchars((string)($test_item['starts_at'] ?: 'Open now')); ?><br>
+                        Ends: <?php echo htmlspecialchars((string)($test_item['ends_at'] ?: 'No deadline')); ?><br>
+                        <?php echo (int)($test_item['duration_minutes'] ?? 30); ?> min
+                      </small>
+                    </td>
                     <?php if ($role === 'student'): ?>
                       <td>
-                        <?php echo htmlspecialchars($a['status'] ?? 'Not Submitted'); ?>
-                        <?php if (isset($a['score'])): ?><br>Score: <?php echo $a['score']; ?>%<?php endif; ?>
+                        <?php
+                          $isSubmitted = isset($test_item['score']) && $test_item['score'] !== null;
+                          $pct = $isSubmitted && (int)$test_item['total'] > 0 ? round(((float)$test_item['score'] / (int)$test_item['total']) * 100, 1) : 0;
+                          $passed = $isSubmitted && $pct >= (int)($test_item['pass_percentage'] ?? 40);
+                        ?>
+                        <?php if ($isSubmitted): ?>
+                          <strong><?php echo htmlspecialchars((string)$test_item['score']); ?>/<?php echo htmlspecialchars((string)$test_item['total']); ?> (<?php echo $pct; ?>%)</strong><br>
+                          <span class="role-badge <?php echo $passed ? 'role-student' : 'role-superadmin'; ?>"><?php echo $passed ? 'Pass' : 'Fail'; ?></span>
+                          <small style="color:var(--muted);">Rank #<?php echo (int)($test_item['student_rank'] ?? 1); ?> · <?php echo htmlspecialchars((string)($test_item['result_status'] ?? 'Evaluated')); ?></small>
+                        <?php else: ?>
+                          <span class="role-badge role-admin">Available</span>
+                        <?php endif; ?>
                       </td>
                       <td>
-                        <?php 
-                          // Check if there is a mock test for this assignment/course.
-                          $mcq_check = $conn->prepare("SELECT id FROM mock_tests WHERE cid = ? AND title = ? LIMIT 1");
-                          $mcq_check->bind_param("is", $a['cid'], $a['title']);
-                          $mcq_check->execute();
-                          $mcq_row = $mcq_check->get_result()->fetch_assoc();
-                          $has_mcq = $mcq_row !== null;
+                        <?php
+                          $nowTs = time();
+                          $notOpen = !empty($test_item['starts_at']) && $nowTs < strtotime($test_item['starts_at']);
+                          $closed = !empty($test_item['ends_at']) && $nowTs > strtotime($test_item['ends_at']);
                         ?>
-                        <?php if (!isset($a['status']) || $a['status'] === 'Not Submitted'): ?>
-                          <?php if ($has_mcq): ?>
-                            <a href="take_mcq.php?test_id=<?php echo $mcq_row['id']; ?>" class="btn btn-primary" style="padding:0.25rem 0.5rem; font-size:0.8rem;">Take Test</a>
-                          <?php else: ?>
-                            <form action="../scripts/php/manage_assignments.php" method="post">
-                              <input type="hidden" name="action" value="submit_assignment">
-                              <input type="hidden" name="assignment_id" value="<?php echo $a['id']; ?>">
-                              <button type="submit" class="btn btn-primary" style="padding:0.25rem 0.5rem; font-size:0.8rem;">Submit</button>
-                            </form>
-                          <?php endif; ?>
+                        <?php if (!$isSubmitted && !$notOpen && !$closed): ?>
+                          <a href="take_mcq.php?test_id=<?php echo $test_item['id']; ?>" class="btn btn-primary" style="padding:0.25rem 0.5rem; font-size:0.8rem;">Take Test</a>
+                        <?php elseif ($notOpen): ?>
+                          <span style="color:var(--muted); font-size:0.85rem; font-weight:700;">Scheduled</span>
+                        <?php elseif ($closed && !$isSubmitted): ?>
+                          <span style="color:var(--danger); font-size:0.85rem; font-weight:700;">Closed</span>
+                        <?php else: ?>
+                          <span style="color:var(--muted); font-size:0.85rem; font-weight:700;">Completed</span>
                         <?php endif; ?>
                       </td>
                     <?php else: ?>
                       <td>
-                        <?php
-                          $sub_stmt = $conn->prepare("SELECT COUNT(*) as c FROM student_assignments WHERE assignment_id = ?");
-                          $sub_stmt->bind_param("i", $a['id']);
-                          $sub_stmt->execute();
-                          echo $sub_stmt->get_result()->fetch_assoc()['c'] . " submitted";
-                        ?>
+                        <?php echo (int)($test_item['attempts'] ?? 0); ?> attempts<br>
+                        <small style="color:var(--muted);">Avg: <?php echo round((float)($test_item['avg_pct'] ?? 0), 1); ?>% · Review: <?php echo (int)($test_item['pending_review'] ?? 0); ?></small>
                       </td>
                       <td>
-                        <a href="manage_mcq_ui.php?assignment_id=<?php echo $a['id']; ?>" class="btn btn-secondary" style="padding:0.25rem 0.5rem; font-size:0.8rem;">Manage MCQs</a>
+                        <?php if ($role === 'teacher'): ?>
+                          <a href="manage_mcq_ui.php?test_id=<?php echo $test_item['id']; ?>" class="btn btn-secondary" style="padding:0.25rem 0.5rem; font-size:0.8rem;">Manage</a>
+                        <?php else: ?>
+                          <?php echo htmlspecialchars($test_item['teacher_email'] ?? '-'); ?>
+                        <?php endif; ?>
                       </td>
                     <?php endif; ?>
                   </tr>
@@ -1299,8 +1355,8 @@ if ($role === 'superadmin' || $role === 'admin') {
             <input type="hidden" name="action" value="add_gap">
             <input type="hidden" name="semail" value="<?php echo htmlspecialchars($username); ?>">
             <label class="field compact">
-              <span>Student Email</span>
-              <input type="email" value="<?php echo htmlspecialchars($username); ?>" readonly>
+              <span>Student Name</span>
+              <input type="text" value="<?php echo htmlspecialchars($student_display_name); ?>" readonly>
             </label>
             <label class="field compact">
               <span>Start Date</span>
@@ -1333,7 +1389,7 @@ if ($role === 'superadmin' || $role === 'admin') {
                   <tr><td colspan="4" style="text-align:center; color:var(--muted);">No gaps recorded.</td></tr>
                 <?php else: foreach ($all_gaps as $g): ?>
                   <tr>
-                    <td><strong><?php echo htmlspecialchars($g['semail']); ?></strong></td>
+                    <td><strong><?php echo htmlspecialchars($student_names[$g['semail']] ?? $g['semail']); ?></strong></td>
                     <td><?php echo htmlspecialchars($g['start_date']); ?> to <?php echo htmlspecialchars($g['end_date']); ?></td>
                     <td><?php echo htmlspecialchars($g['reason']); ?></td>
                     <?php if ($role !== 'student'): ?>

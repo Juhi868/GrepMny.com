@@ -13,298 +13,209 @@ if (!$test_id) {
 }
 
 $conn = db();
-
-// Get test details
-$stmt = $conn->prepare("SELECT * FROM mock_tests WHERE id = ?");
-$stmt->bind_param("i", $test_id);
+$teacher = $_SESSION['username'];
+$stmt = $conn->prepare("SELECT * FROM mock_tests WHERE id = ? AND teacher_email = ?");
+$stmt->bind_param("is", $test_id, $teacher);
 $stmt->execute();
 $test = $stmt->get_result()->fetch_assoc();
-
 if (!$test) {
     redirect_with_status('dashboard.php', 'error', 'Test not found.');
 }
 
-// Get existing questions
 $q_stmt = $conn->prepare("SELECT * FROM mock_test_questions WHERE test_id = ? ORDER BY id ASC");
 $q_stmt->bind_param("i", $test_id);
 $q_stmt->execute();
 $questions = $q_stmt->get_result()->fetch_all(MYSQLI_ASSOC);
-$question_count = count($questions);
 
-// Get submission count
-$sub_stmt = $conn->prepare("SELECT COUNT(*) as c FROM mock_test_results WHERE test_id = ?");
-$sub_stmt->bind_param("i", $test_id);
-$sub_stmt->execute();
-$submission_count = (int) $sub_stmt->get_result()->fetch_assoc()['c'];
+$r_stmt = $conn->prepare("SELECT r.*, COALESCE(sd.sname, r.semail) AS student_name FROM mock_test_results r LEFT JOIN `student details` sd ON sd.semail COLLATE utf8mb4_unicode_ci = r.semail COLLATE utf8mb4_unicode_ci AND sd.cid = ? WHERE r.test_id = ? GROUP BY r.id ORDER BY r.score DESC, r.submitted_at ASC");
+$r_stmt->bind_param("ii", $test['cid'], $test_id);
+$r_stmt->execute();
+$results = $r_stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+
+$answersByResult = [];
+$a_stmt = $conn->prepare("SELECT a.*, q.question_text, q.question_type, q.marks FROM mock_test_answers a JOIN mock_test_questions q ON q.id = a.question_id JOIN mock_test_results r ON r.id = a.result_id WHERE r.test_id = ? ORDER BY a.id ASC");
+$a_stmt->bind_param("i", $test_id);
+$a_stmt->execute();
+foreach ($a_stmt->get_result()->fetch_all(MYSQLI_ASSOC) as $answer) {
+    $answersByResult[(int)$answer['result_id']][] = $answer;
+}
+
+$status = $_GET['status'] ?? '';
+$message = $_GET['message'] ?? '';
 ?>
 <!DOCTYPE html>
 <html lang="en" data-page="dashboard">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Manage Questions — <?php echo htmlspecialchars($test['title']); ?> | GrepMny</title>
+  <title>Manage Test | GrepMny</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
   <link href="../assets/css/app.css" rel="stylesheet">
   <style>
-    .mcq-page { max-width: 860px; margin: 2rem auto; padding: 0 1rem; }
-    .mcq-header {
-      display: flex; justify-content: space-between; align-items: center;
-      flex-wrap: wrap; gap: 1rem; margin-bottom: 2rem;
-    }
-    .mcq-card {
-      background: var(--surface-strong); border: 1px solid var(--line);
-      border-radius: var(--radius); padding: 1.5rem; box-shadow: var(--shadow);
-      margin-bottom: 1.5rem;
-    }
-    .mcq-card h3 { margin: 0 0 0.25rem; font-size: 1.15rem; font-weight: 800; }
-    .mcq-card .description { margin: 0 0 1rem; color: var(--muted); font-size: 0.9rem; }
-
-    /* Progress ring */
-    .progress-ring-wrap { display: flex; align-items: center; gap: 1rem; margin-bottom: 1.5rem; }
-    .progress-ring { width: 64px; height: 64px; transform: rotate(-90deg); }
-    .progress-ring-bg { fill: none; stroke: var(--line); stroke-width: 6; }
-    .progress-ring-fill {
-      fill: none; stroke: url(#ringGrad); stroke-width: 6;
-      stroke-linecap: round; transition: stroke-dashoffset 0.6s cubic-bezier(0.4,0,0.2,1);
-    }
-    .progress-info strong { font-size: 1.5rem; display: block; letter-spacing: -0.03em; }
-    .progress-info span { font-size: 0.8rem; color: var(--muted); font-weight: 600; }
-
-    /* Form */
-    .options-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
-    @media (max-width: 600px) { .options-grid { grid-template-columns: 1fr; } }
-    .field-compact { display: flex; flex-direction: column; gap: 0.3rem; }
-    .field-compact span { font-size: 0.8rem; font-weight: 700; color: var(--muted); }
-    .field-compact input, .field-compact textarea, .field-compact select {
-      padding: 0.6rem 0.75rem; border: 1px solid var(--line); border-radius: var(--radius);
-      background: var(--surface-strong); color: var(--text); font-family: inherit; font-size: 0.9rem;
-    }
-    .field-compact textarea { resize: vertical; }
-
-    /* Question cards */
-    .q-card {
-      background: color-mix(in srgb, var(--surface) 40%, transparent);
-      border: 1px solid var(--line); border-radius: var(--radius);
-      padding: 1.25rem; margin-bottom: 1rem;
-      transition: border-color 0.2s;
-    }
-    .q-card:hover { border-color: var(--primary); }
-    .q-card-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; }
-    .q-number {
-      display: inline-flex; align-items: center; justify-content: center;
-      width: 28px; height: 28px; border-radius: 50%; font-size: 0.8rem; font-weight: 800;
-      background: linear-gradient(135deg, var(--primary), var(--accent)); color: #fff; flex-shrink: 0;
-    }
-    .q-text { font-weight: 700; font-size: 0.95rem; line-height: 1.5; }
-    .q-options { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-top: 0.75rem; }
-    @media (max-width: 600px) { .q-options { grid-template-columns: 1fr; } }
-    .q-opt {
-      padding: 0.5rem 0.75rem; border-radius: 6px; font-size: 0.85rem;
-      background: var(--surface-strong); border: 1px solid var(--line);
-    }
-    .q-opt.is-correct { border-color: var(--success); background: color-mix(in srgb, var(--success) 10%, var(--surface-strong)); font-weight: 700; }
-    .q-opt-letter { font-weight: 800; margin-right: 0.4rem; }
-
-    .btn-danger {
-      background: transparent; border: 1px solid var(--danger); color: var(--danger);
-      padding: 0.3rem 0.65rem; border-radius: var(--radius); font-size: 0.8rem;
-      font-weight: 800; cursor: pointer; font-family: inherit; transition: background 0.2s, color 0.2s;
-    }
-    .btn-danger:hover { background: var(--danger); color: #fff; }
-
-    .stats-row { display: flex; gap: 1.5rem; flex-wrap: wrap; margin-bottom: 1rem; }
-    .stat-chip {
-      display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 1rem;
-      background: var(--surface-strong); border: 1px solid var(--line); border-radius: 999px;
-      font-size: 0.85rem; font-weight: 700;
-    }
-    .stat-chip .dot { width: 8px; height: 8px; border-radius: 50%; }
-
-    .alert-bar {
-      padding: 0.75rem 1rem; border-radius: var(--radius); font-size: 0.9rem;
-      font-weight: 600; margin-bottom: 1.5rem; animation: fadeSlideIn 0.3s ease;
-    }
-    .alert-bar.success { background: color-mix(in srgb, var(--success) 15%, var(--surface-strong)); color: var(--success); border: 1px solid var(--success); }
-    .alert-bar.error { background: color-mix(in srgb, var(--danger) 15%, var(--surface-strong)); color: var(--danger); border: 1px solid var(--danger); }
-
-    @keyframes fadeSlideIn {
-      from { opacity: 0; transform: translateY(-8px); }
-      to { opacity: 1; transform: translateY(0); }
-    }
+    .test-admin { width:min(1120px, calc(100% - 2rem)); margin:2rem auto; display:grid; gap:1.5rem; }
+    .panel { background:var(--surface-strong); border:1px solid var(--line); border-radius:var(--radius); padding:1.4rem; box-shadow:var(--shadow); }
+    .admin-head { display:flex; justify-content:space-between; gap:1rem; flex-wrap:wrap; align-items:flex-start; }
+    .form-grid { display:grid; grid-template-columns:repeat(3, minmax(0,1fr)); gap:1rem; }
+    @media (max-width: 780px) { .form-grid { grid-template-columns:1fr; } }
+    .wide { grid-column:1 / -1; }
+    .question-card { border:1px solid var(--line); border-radius:var(--radius); padding:1rem; margin-top:.8rem; }
+    .pill { display:inline-flex; padding:.25rem .55rem; border-radius:999px; background:color-mix(in srgb, var(--primary) 12%, var(--surface)); color:var(--primary); font-weight:800; font-size:.75rem; }
+    .option-list { display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:.5rem; margin-top:.75rem; }
+    @media (max-width: 640px) { .option-list { grid-template-columns:1fr; } }
+    .option-list div { border:1px solid var(--line); border-radius:6px; padding:.55rem .7rem; }
+    .correct { border-color:var(--success)!important; background:color-mix(in srgb, var(--success) 10%, var(--surface-strong)); }
+    .answer-box { border-top:1px solid var(--line); padding-top:1rem; margin-top:1rem; }
+    .alert-bar { padding:.75rem 1rem; border-radius:var(--radius); font-weight:700; }
+    .alert-bar.success { background:color-mix(in srgb, var(--success) 15%, var(--surface-strong)); color:var(--success); }
+    .alert-bar.error { background:color-mix(in srgb, var(--danger) 15%, var(--surface-strong)); color:var(--danger); }
   </style>
   <script>
     const root = document.documentElement;
-    const storedTheme = localStorage.getItem("GrepMny-theme");
-    const preferredDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-    root.dataset.theme = storedTheme || (preferredDark ? "dark" : "light");
+    root.dataset.theme = localStorage.getItem("GrepMny-theme") || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
   </script>
 </head>
 <body>
   <header class="site-header compact-header" data-header>
     <nav class="nav-wrap" aria-label="Primary navigation">
-      <a class="brand-mark" href="./dashboard.php" aria-label="GrepMny home">
-        <span>GM</span>
-        <strong>GrepMny</strong>
-      </a>
-      <div class="site-menu always-visible">
-        <a href="./dashboard.php">← Back to Dashboard</a>
-      </div>
+      <a class="brand-mark" href="./dashboard.php"><span>GM</span><strong>GrepMny</strong></a>
+      <div class="site-menu always-visible"><a href="./dashboard.php">Back to Dashboard</a></div>
       <button class="theme-toggle" type="button" aria-label="Toggle dark mode" data-theme-toggle></button>
     </nav>
   </header>
 
-  <main class="mcq-page">
-    <?php
-    $status = $_GET['status'] ?? '';
-    $message = $_GET['message'] ?? '';
-    if ($status && $message):
-    ?>
-      <div class="alert-bar <?php echo $status === 'success' ? 'success' : 'error'; ?>">
-        <?php echo htmlspecialchars($message); ?>
-      </div>
-    <?php endif; ?>
+  <main class="test-admin">
+    <?php if ($status && $message): ?><div class="alert-bar <?php echo $status === 'success' ? 'success' : 'error'; ?>"><?php echo htmlspecialchars($message); ?></div><?php endif; ?>
 
-    <div class="mcq-header">
-      <div>
-        <p class="eyebrow" style="margin:0;">Mock Test · Course #<?php echo $test['cid']; ?></p>
-        <h1 style="margin:0; font-size:1.6rem; letter-spacing:-0.04em;"><?php echo htmlspecialchars($test['title']); ?></h1>
-      </div>
-      <a href="./dashboard.php" class="btn btn-secondary" style="min-height:auto; padding:0.6rem 1.25rem;">Dashboard</a>
-    </div>
-
-    <!-- Stats -->
-    <div class="stats-row">
-      <div class="stat-chip">
-        <span class="dot" style="background:var(--primary);"></span>
-        <?php echo $question_count; ?>/10 Questions
-      </div>
-      <div class="stat-chip">
-        <span class="dot" style="background:var(--success);"></span>
-        <?php echo $submission_count; ?> Submissions
-      </div>
-      <div class="stat-chip">
-        <span class="dot" style="background:var(--accent);"></span>
-        30 min Time Limit
-      </div>
-    </div>
-
-    <!-- Progress ring + Add form -->
-    <div class="mcq-card">
-      <div style="display:flex; align-items:flex-start; gap:1.5rem; flex-wrap:wrap;">
-        <div class="progress-ring-wrap" style="margin-bottom:0;">
-          <?php
-          $circumference = 2 * M_PI * 26; // radius 26
-          $offset = $circumference - ($question_count / 10) * $circumference;
-          ?>
-          <svg class="progress-ring" viewBox="0 0 64 64">
-            <defs>
-              <linearGradient id="ringGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" stop-color="var(--primary)" />
-                <stop offset="100%" stop-color="var(--accent)" />
-              </linearGradient>
-            </defs>
-            <circle class="progress-ring-bg" cx="32" cy="32" r="26" />
-            <circle class="progress-ring-fill" cx="32" cy="32" r="26"
-              stroke-dasharray="<?php echo $circumference; ?>"
-              stroke-dashoffset="<?php echo $offset; ?>" />
-          </svg>
-          <div class="progress-info">
-            <strong><?php echo $question_count; ?>/10</strong>
-            <span><?php echo $question_count >= 10 ? 'Test is ready!' : 'Questions added'; ?></span>
-          </div>
+    <section class="panel">
+      <div class="admin-head">
+        <div>
+          <p class="eyebrow" style="margin:0;">Test Module · Course #<?php echo (int)$test['cid']; ?></p>
+          <h1 style="margin:.15rem 0 0;"><?php echo htmlspecialchars($test['title']); ?></h1>
         </div>
-      </div>
-
-      <?php if ($question_count < 10): ?>
-        <h3 style="margin-top:1.25rem;">Add New Question</h3>
-        <p class="description">Fill in the question and all four options. Mark the correct answer.</p>
-        <form action="../scripts/php/manage_mcq.php" method="post">
-          <input type="hidden" name="action" value="add_question">
+        <form action="../scripts/php/manage_mcq.php" method="post" onsubmit="return confirm('Delete this test and all attempts?');">
+          <input type="hidden" name="action" value="delete_test">
           <input type="hidden" name="test_id" value="<?php echo $test_id; ?>">
-
-          <div class="field-compact" style="margin-bottom:1rem;">
-            <span>Question Text</span>
-            <textarea name="question_text" rows="3" required placeholder="Enter the question..."></textarea>
-          </div>
-
-          <div class="options-grid" style="margin-bottom:1rem;">
-            <div class="field-compact">
-              <span>Option A</span>
-              <input type="text" name="option_a" required placeholder="First option">
-            </div>
-            <div class="field-compact">
-              <span>Option B</span>
-              <input type="text" name="option_b" required placeholder="Second option">
-            </div>
-            <div class="field-compact">
-              <span>Option C</span>
-              <input type="text" name="option_c" required placeholder="Third option">
-            </div>
-            <div class="field-compact">
-              <span>Option D</span>
-              <input type="text" name="option_d" required placeholder="Fourth option">
-            </div>
-          </div>
-
-          <div style="display:flex; gap:1rem; align-items:end; flex-wrap:wrap;">
-            <div class="field-compact">
-              <span>Correct Answer</span>
-              <select name="correct_option" required style="min-width:100px;">
-                <option value="A">A</option>
-                <option value="B">B</option>
-                <option value="C">C</option>
-                <option value="D">D</option>
-              </select>
-            </div>
-            <button class="btn btn-primary" type="submit" style="min-height:2.5rem;">Add Question</button>
-          </div>
+          <button class="btn btn-secondary" style="border-color:var(--danger); color:var(--danger);" type="submit">Delete Test</button>
         </form>
-      <?php else: ?>
-        <div style="margin-top:1rem; padding:1rem; border-radius:var(--radius); background:color-mix(in srgb, var(--success) 10%, var(--surface)); border:1px solid var(--success); color:var(--success); font-weight:700;">
-          ✓ All 10 questions added. This test is ready for students!
-        </div>
-      <?php endif; ?>
-    </div>
+      </div>
+    </section>
 
-    <!-- Existing Questions -->
-    <div class="mcq-card">
-      <h3>Questions (<?php echo $question_count; ?>)</h3>
-      <p class="description">Review and manage questions for this test.</p>
+    <section class="panel">
+      <h3>Schedule & Assignment</h3>
+      <form action="../scripts/php/manage_mcq.php" method="post" class="form-grid">
+        <input type="hidden" name="action" value="update_test">
+        <input type="hidden" name="test_id" value="<?php echo $test_id; ?>">
+        <label class="field compact"><span>Course ID</span><input type="number" name="cid" value="<?php echo (int)$test['cid']; ?>" required></label>
+        <label class="field compact"><span>Title</span><input type="text" name="title" value="<?php echo htmlspecialchars($test['title']); ?>" required></label>
 
-      <?php if (empty($questions)): ?>
-        <p style="color:var(--muted); font-style:italic;">No questions added yet. Use the form above to add your first question.</p>
-      <?php else: ?>
-        <?php foreach ($questions as $index => $q): ?>
-          <div class="q-card">
-            <div class="q-card-header">
-              <div style="display:flex; gap:0.75rem; align-items:flex-start;">
-                <span class="q-number"><?php echo $index + 1; ?></span>
-                <span class="q-text"><?php echo nl2br(htmlspecialchars($q['question_text'])); ?></span>
-              </div>
-              <form action="../scripts/php/manage_mcq.php" method="post" onsubmit="return confirm('Delete this question?');">
-                <input type="hidden" name="action" value="delete_question">
-                <input type="hidden" name="question_id" value="<?php echo $q['id']; ?>">
-                <input type="hidden" name="test_id" value="<?php echo $test_id; ?>">
-                <button type="submit" class="btn-danger">Delete</button>
-              </form>
-            </div>
-            <div class="q-options">
-              <?php foreach (['A' => 'option_a', 'B' => 'option_b', 'C' => 'option_c', 'D' => 'option_d'] as $letter => $field): ?>
-                <div class="q-opt <?php echo $q['correct_option'] === $letter ? 'is-correct' : ''; ?>">
-                  <span class="q-opt-letter"><?php echo $letter; ?>.</span>
-                  <?php echo htmlspecialchars($q[$field]); ?>
-                  <?php if ($q['correct_option'] === $letter): ?> <span style="float:right;">✓</span><?php endif; ?>
-                </div>
+        <label class="field compact"><span>Starts At</span><input type="datetime-local" name="starts_at" value="<?php echo $test['starts_at'] ? date('Y-m-d\TH:i', strtotime($test['starts_at'])) : ''; ?>"></label>
+        <label class="field compact"><span>Ends At</span><input type="datetime-local" name="ends_at" value="<?php echo $test['ends_at'] ? date('Y-m-d\TH:i', strtotime($test['ends_at'])) : ''; ?>"></label>
+        <label class="field compact"><span>Duration Minutes</span><input type="number" min="1" max="240" name="duration_minutes" value="<?php echo (int)$test['duration_minutes']; ?>" required></label>
+        <label class="field compact"><span>Pass Percentage</span><input type="number" min="0" max="100" name="pass_percentage" value="<?php echo (int)$test['pass_percentage']; ?>" required></label>
+        <label class="field compact wide"><span>Specific Students</span><input type="text" name="assigned_students" value="<?php echo htmlspecialchars((string)$test['assigned_students']); ?>" placeholder="Comma-separated student emails; leave blank for full course/batch"></label>
+        <label class="field compact wide"><span>Description</span><textarea name="description" rows="3"><?php echo htmlspecialchars((string)$test['description']); ?></textarea></label>
+        <button class="btn btn-primary" type="submit">Save Test</button>
+      </form>
+    </section>
+
+    <section class="panel">
+      <h3>Add Question</h3>
+      <form action="../scripts/php/manage_mcq.php" method="post" class="form-grid">
+        <input type="hidden" name="action" value="add_question">
+        <input type="hidden" name="test_id" value="<?php echo $test_id; ?>">
+        <label class="field compact"><span>Type</span><select name="question_type" id="questionType"><option value="mcq">MCQ</option><option value="multiple_correct">Multiple Correct</option><option value="true_false">True / False</option><option value="fill_blank">Fill in the Blank</option><option value="subjective">Subjective</option></select></label>
+        <label class="field compact"><span>Marks</span><input type="number" name="marks" min="1" max="100" value="1" required></label>
+        <label class="field compact wide"><span>Question</span><textarea name="question_text" rows="3" required></textarea></label>
+        <label class="field compact option-field"><span>Option A</span><input type="text" name="option_a"></label>
+        <label class="field compact option-field"><span>Option B</span><input type="text" name="option_b"></label>
+        <label class="field compact option-field"><span>Option C</span><input type="text" name="option_c"></label>
+        <label class="field compact option-field"><span>Option D</span><input type="text" name="option_d"></label>
+        <label class="field compact single-correct"><span>Correct Option</span><select name="correct_option"><option>A</option><option>B</option><option>C</option><option>D</option></select></label>
+        <label class="field compact multi-correct" style="display:none;"><span>Correct Options</span><select name="correct_options[]" multiple size="4"><option>A</option><option>B</option><option>C</option><option>D</option></select></label>
+        <label class="field compact true-false" style="display:none;"><span>Correct Answer</span><select name="true_false_answer"><option>TRUE</option><option>FALSE</option></select></label>
+        <label class="field compact blank-answer" style="display:none;"><span>Accepted Answer</span><input type="text" name="blank_answer"></label>
+        <button class="btn btn-primary" type="submit">Add Question</button>
+      </form>
+    </section>
+
+    <section class="panel">
+      <h3>Questions (<?php echo count($questions); ?>)</h3>
+      <?php if (!$questions): ?><p class="description">No questions added yet.</p><?php endif; ?>
+      <?php foreach ($questions as $i => $q): ?>
+        <article class="question-card">
+          <div style="display:flex; justify-content:space-between; gap:1rem; align-items:flex-start;">
+            <div><span class="pill"><?php echo htmlspecialchars(str_replace('_', ' ', $q['question_type'])); ?> · <?php echo (int)$q['marks']; ?> marks</span><h4><?php echo ($i + 1) . '. ' . htmlspecialchars($q['question_text']); ?></h4></div>
+            <form action="../scripts/php/manage_mcq.php" method="post" onsubmit="return confirm('Delete this question?');">
+              <input type="hidden" name="action" value="delete_question"><input type="hidden" name="question_id" value="<?php echo (int)$q['id']; ?>"><input type="hidden" name="test_id" value="<?php echo $test_id; ?>">
+              <button class="btn btn-secondary" type="submit" style="min-height:auto; padding:.35rem .75rem;">Delete</button>
+            </form>
+          </div>
+          <?php if (in_array($q['question_type'], ['mcq','multiple_correct','true_false'], true)): ?>
+            <div class="option-list">
+              <?php foreach (['A'=>'option_a','B'=>'option_b','C'=>'option_c','D'=>'option_d'] as $letter => $field): if ($q[$field] === '') continue; ?>
+                <div class="<?php echo in_array($letter, explode(',', (string)$q['correct_option']), true) || strtoupper((string)$q['correct_option']) === strtoupper((string)$q[$field]) ? 'correct' : ''; ?>"><strong><?php echo $letter; ?>.</strong> <?php echo htmlspecialchars($q[$field]); ?></div>
               <?php endforeach; ?>
             </div>
-          </div>
-        <?php endforeach; ?>
-      <?php endif; ?>
-    </div>
-  </main>
+          <?php elseif ($q['question_type'] === 'fill_blank'): ?>
+            <p><strong>Answer key:</strong> <?php echo htmlspecialchars($q['correct_option']); ?></p>
+          <?php else: ?>
+            <p class="description">Subjective question. Teacher evaluation required after submission.</p>
+          <?php endif; ?>
+        </article>
+      <?php endforeach; ?>
+    </section>
 
+    <section class="panel">
+      <h3>Attempts & Evaluation</h3>
+      <div class="data-table-wrapper">
+        <table class="data-table">
+          <thead><tr><th>Rank</th><th>Student</th><th>Score</th><th>Status</th><th>Submitted</th></tr></thead>
+          <tbody>
+            <?php if (!$results): ?><tr><td colspan="5" style="text-align:center; color:var(--muted);">No attempts yet.</td></tr><?php endif; ?>
+            <?php foreach ($results as $rank => $result): $pct = (int)$result['total'] > 0 ? round(((float)$result['score'] / (int)$result['total']) * 100, 1) : 0; ?>
+              <tr><td>#<?php echo $rank + 1; ?></td><td><strong><?php echo htmlspecialchars($result['student_name']); ?></strong><br><small><?php echo htmlspecialchars($result['semail']); ?></small></td><td><?php echo htmlspecialchars((string)$result['score']); ?>/<?php echo (int)$result['total']; ?> (<?php echo $pct; ?>%)</td><td><?php echo htmlspecialchars($result['status']); ?></td><td><?php echo htmlspecialchars($result['submitted_at']); ?></td></tr>
+              <?php foreach ($answersByResult[(int)$result['id']] ?? [] as $answer): if ($answer['question_type'] !== 'subjective') continue; ?>
+                <tr><td></td><td colspan="4">
+                  <div class="answer-box">
+                    <strong><?php echo htmlspecialchars($answer['question_text']); ?></strong>
+                    <p><?php echo nl2br(htmlspecialchars((string)$answer['answer_text'])); ?></p>
+                    <form action="../scripts/php/manage_mcq.php" method="post" style="display:flex; gap:.75rem; flex-wrap:wrap; align-items:end;">
+                      <input type="hidden" name="action" value="evaluate_answer"><input type="hidden" name="test_id" value="<?php echo $test_id; ?>"><input type="hidden" name="answer_id" value="<?php echo (int)$answer['id']; ?>">
+                      <label class="field compact"><span>Marks / <?php echo (int)$answer['marks']; ?></span><input type="number" step="0.5" min="0" max="<?php echo (int)$answer['marks']; ?>" name="marks_awarded" value="<?php echo htmlspecialchars((string)$answer['marks_awarded']); ?>"></label>
+                      <label class="field compact"><span>Feedback</span><input type="text" name="teacher_feedback" value="<?php echo htmlspecialchars((string)$answer['teacher_feedback']); ?>"></label>
+                      <button class="btn btn-primary" type="submit">Save Evaluation</button>
+                    </form>
+                  </div>
+                </td></tr>
+              <?php endforeach; ?>
+            <?php endforeach; ?>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
   <script src="../assets/js/app.js" defer></script>
+  <script>
+    const typeSelect = document.getElementById('questionType');
+    const groups = {
+      option: document.querySelectorAll('.option-field'),
+      single: document.querySelector('.single-correct'),
+      multi: document.querySelector('.multi-correct'),
+      tf: document.querySelector('.true-false'),
+      blank: document.querySelector('.blank-answer')
+    };
+    function syncQuestionFields() {
+      const type = typeSelect.value;
+      groups.option.forEach(el => el.style.display = ['mcq','multiple_correct'].includes(type) ? '' : 'none');
+      groups.single.style.display = type === 'mcq' ? '' : 'none';
+      groups.multi.style.display = type === 'multiple_correct' ? '' : 'none';
+      groups.tf.style.display = type === 'true_false' ? '' : 'none';
+      groups.blank.style.display = type === 'fill_blank' ? '' : 'none';
+    }
+    typeSelect.addEventListener('change', syncQuestionFields);
+    syncQuestionFields();
+  </script>
 </body>
 </html>

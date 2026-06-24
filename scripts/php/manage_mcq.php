@@ -9,182 +9,266 @@ if (!isset($_SESSION['username'])) {
 
 require_post('../../src/dashboard.php');
 
+$conn = db();
 $action = $_POST['action'] ?? '';
+$role = $_SESSION['role'] ?? 'student';
+$user = $_SESSION['username'];
 $dashboard_url = '../../src/dashboard.php';
 
-try {
-    $conn = db();
-} catch (Exception $e) {
-    redirect_with_status($dashboard_url, 'error', 'Database connection failed.');
+function test_redirect(int $testId): string
+{
+    return '../../src/manage_mcq_ui.php?test_id=' . $testId;
 }
 
-// ── CREATE TEST (Teacher only) ──────────────────────────
-if ($action === 'create_test') {
-    if (($_SESSION['role'] ?? '') !== 'teacher') {
-        redirect_with_status($dashboard_url, 'error', 'Only teachers can create tests.');
+function teacher_owns_test(mysqli $conn, int $testId, string $teacherEmail): bool
+{
+    $stmt = $conn->prepare("SELECT id FROM mock_tests WHERE id = ? AND teacher_email = ?");
+    $stmt->bind_param("is", $testId, $teacherEmail);
+    $stmt->execute();
+    return $stmt->get_result()->num_rows > 0;
+}
+
+function normalize_correct_answer(string $type, array $post): string
+{
+    if ($type === 'multiple_correct') {
+        $answers = array_values(array_intersect(['A', 'B', 'C', 'D'], array_map('strtoupper', (array)($post['correct_options'] ?? []))));
+        sort($answers);
+        return implode(',', $answers);
+    }
+    if ($type === 'true_false') {
+        return strtoupper(trim((string)($post['true_false_answer'] ?? 'TRUE'))) === 'FALSE' ? 'FALSE' : 'TRUE';
+    }
+    if ($type === 'fill_blank') {
+        return clean_string((string)($post['blank_answer'] ?? ''), 255);
+    }
+    if ($type === 'subjective') {
+        return '';
+    }
+    return strtoupper(trim((string)($post['correct_option'] ?? 'A')));
+}
+
+if ($action === 'create_test' || $action === 'update_test') {
+    if ($role !== 'teacher') {
+        redirect_with_status($dashboard_url, 'error', 'Only teachers can manage tests.');
     }
 
     $cid = filter_var($_POST['cid'] ?? '', FILTER_VALIDATE_INT);
-    $title = clean_string($_POST['title'] ?? '', 100);
-    $teacher_email = $_SESSION['username'];
+    $title = clean_string((string)($_POST['title'] ?? ''), 100);
+    $description = clean_string((string)($_POST['description'] ?? ''), 1000);
 
-    if (!$cid || !$title) {
+    $assignedStudents = clean_string((string)($_POST['assigned_students'] ?? ''), 2000);
+    $startsAt = trim((string)($_POST['starts_at'] ?? '')) ?: null;
+    $endsAt = trim((string)($_POST['ends_at'] ?? '')) ?: null;
+    $duration = max(1, min(240, (int)($_POST['duration_minutes'] ?? 30)));
+    $pass = max(0, min(100, (int)($_POST['pass_percentage'] ?? 40)));
+
+    if (!$cid || $title === '') {
         redirect_with_status($dashboard_url, 'error', 'Course ID and title are required.');
     }
 
-    $stmt = $conn->prepare("INSERT INTO mock_tests (cid, teacher_email, title) VALUES (?, ?, ?)");
-    $stmt->bind_param("iss", $cid, $teacher_email, $title);
-
-    if ($stmt->execute()) {
-        redirect_with_status($dashboard_url, 'success', 'Mock test created successfully.');
-    } else {
-        redirect_with_status($dashboard_url, 'error', 'Failed to create mock test.');
+    if ($action === 'update_test') {
+        $testId = filter_var($_POST['test_id'] ?? '', FILTER_VALIDATE_INT);
+        if (!$testId || !teacher_owns_test($conn, $testId, $user)) {
+            redirect_with_status($dashboard_url, 'error', 'You can edit only your own tests.');
+        }
+        $stmt = $conn->prepare("UPDATE mock_tests SET cid = ?, title = ?, description = ?, assigned_students = ?, starts_at = ?, ends_at = ?, duration_minutes = ?, pass_percentage = ? WHERE id = ?");
+        $stmt->bind_param("isssssiii", $cid, $title, $description, $assignedStudents, $startsAt, $endsAt, $duration, $pass, $testId);
+        $stmt->execute();
+        redirect_with_status(test_redirect($testId), 'success', 'Test schedule and assignment updated.');
     }
 
-// ── DELETE TEST (Teacher only) ──────────────────────────
-} else if ($action === 'delete_test') {
-    if (($_SESSION['role'] ?? '') !== 'teacher') {
+    $stmt = $conn->prepare("INSERT INTO mock_tests (cid, teacher_email, title, description, assigned_students, starts_at, ends_at, duration_minutes, pass_percentage) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
+    $stmt->bind_param("issssssii", $cid, $user, $title, $description, $assignedStudents, $startsAt, $endsAt, $duration, $pass);
+    $stmt->execute();
+    redirect_with_status(test_redirect((int)$conn->insert_id), 'success', 'Test created. Add questions to publish it.');
+}
+
+if ($action === 'delete_test') {
+    if ($role !== 'teacher') {
         redirect_with_status($dashboard_url, 'error', 'Unauthorized.');
     }
-
-    $test_id = filter_var($_POST['test_id'] ?? '', FILTER_VALIDATE_INT);
-    if (!$test_id) {
-        redirect_with_status($dashboard_url, 'error', 'Invalid test ID.');
+    $testId = filter_var($_POST['test_id'] ?? '', FILTER_VALIDATE_INT);
+    if (!$testId || !teacher_owns_test($conn, $testId, $user)) {
+        redirect_with_status($dashboard_url, 'error', 'Invalid test.');
     }
-
     $conn->begin_transaction();
-    try {
-        $del_q = $conn->prepare("DELETE FROM mock_test_questions WHERE test_id = ?");
-        $del_q->bind_param("i", $test_id);
-        $del_q->execute();
-
-        $del_r = $conn->prepare("DELETE FROM mock_test_results WHERE test_id = ?");
-        $del_r->bind_param("i", $test_id);
-        $del_r->execute();
-
-        $del_t = $conn->prepare("DELETE FROM mock_tests WHERE id = ?");
-        $del_t->bind_param("i", $test_id);
-        $del_t->execute();
-
-        $conn->commit();
-        redirect_with_status($dashboard_url, 'success', 'Mock test deleted.');
-    } catch (Exception $e) {
-        $conn->rollback();
-        redirect_with_status($dashboard_url, 'error', 'Failed to delete test.');
+    $ids = [];
+    $res = $conn->prepare("SELECT id FROM mock_test_results WHERE test_id = ?");
+    $res->bind_param("i", $testId);
+    $res->execute();
+    foreach ($res->get_result()->fetch_all(MYSQLI_ASSOC) as $row) {
+        $ids[] = (int)$row['id'];
     }
+    if ($ids) {
+        $in = implode(',', array_fill(0, count($ids), '?'));
+        $types = str_repeat('i', count($ids));
+        $delAnswers = $conn->prepare("DELETE FROM mock_test_answers WHERE result_id IN ($in)");
+        $delAnswers->bind_param($types, ...$ids);
+        $delAnswers->execute();
+    }
+    foreach (['mock_test_questions', 'mock_test_results', 'mock_tests'] as $table) {
+        $column = $table === 'mock_tests' ? 'id' : 'test_id';
+        $stmt = $conn->prepare("DELETE FROM `$table` WHERE `$column` = ?");
+        $stmt->bind_param("i", $testId);
+        $stmt->execute();
+    }
+    $conn->commit();
+    redirect_with_status($dashboard_url, 'success', 'Test deleted.');
+}
 
-// ── ADD QUESTION (Teacher only, max 10) ─────────────────
-} else if ($action === 'add_question') {
-    if (($_SESSION['role'] ?? '') !== 'teacher') {
+if ($action === 'add_question') {
+    if ($role !== 'teacher') {
         redirect_with_status($dashboard_url, 'error', 'Unauthorized.');
     }
-
-    $test_id = filter_var($_POST['test_id'] ?? '', FILTER_VALIDATE_INT);
-    $question_text = clean_string($_POST['question_text'] ?? '', 1000);
-    $option_a = clean_string($_POST['option_a'] ?? '', 255);
-    $option_b = clean_string($_POST['option_b'] ?? '', 255);
-    $option_c = clean_string($_POST['option_c'] ?? '', 255);
-    $option_d = clean_string($_POST['option_d'] ?? '', 255);
-    $correct_option = strtoupper(trim($_POST['correct_option'] ?? 'A'));
-
-    $redirect_url = '../../src/manage_mcq_ui.php?test_id=' . $test_id;
-
-    if (!$test_id || !$question_text || !$option_a || !$option_b || !$option_c || !$option_d || !in_array($correct_option, ['A','B','C','D'])) {
-        redirect_with_status($redirect_url, 'error', 'All fields are required with a valid correct option (A-D).');
-    }
-
-    // Enforce 10-question limit
-    $count_stmt = $conn->prepare("SELECT COUNT(*) as c FROM mock_test_questions WHERE test_id = ?");
-    $count_stmt->bind_param("i", $test_id);
-    $count_stmt->execute();
-    $count = (int) $count_stmt->get_result()->fetch_assoc()['c'];
-
-    if ($count >= 10) {
-        redirect_with_status($redirect_url, 'error', 'Maximum 10 questions per test. Delete a question first to add a new one.');
-    }
-
-    $stmt = $conn->prepare("INSERT INTO mock_test_questions (test_id, question_text, option_a, option_b, option_c, option_d, correct_option) VALUES (?, ?, ?, ?, ?, ?, ?)");
-    $stmt->bind_param("issssss", $test_id, $question_text, $option_a, $option_b, $option_c, $option_d, $correct_option);
-
-    if ($stmt->execute()) {
-        redirect_with_status($redirect_url, 'success', 'Question added. (' . ($count + 1) . '/10)');
-    } else {
-        redirect_with_status($redirect_url, 'error', 'Failed to add question.');
-    }
-
-// ── DELETE QUESTION (Teacher only) ──────────────────────
-} else if ($action === 'delete_question') {
-    if (($_SESSION['role'] ?? '') !== 'teacher') {
-        redirect_with_status($dashboard_url, 'error', 'Unauthorized.');
-    }
-
-    $question_id = filter_var($_POST['question_id'] ?? '', FILTER_VALIDATE_INT);
-    $test_id = filter_var($_POST['test_id'] ?? '', FILTER_VALIDATE_INT);
-    $redirect_url = '../../src/manage_mcq_ui.php?test_id=' . $test_id;
-
-    if (!$question_id) {
-        redirect_with_status($redirect_url, 'error', 'Invalid question ID.');
-    }
-
-    $stmt = $conn->prepare("DELETE FROM mock_test_questions WHERE id = ?");
-    $stmt->bind_param("i", $question_id);
-
-    if ($stmt->execute()) {
-        redirect_with_status($redirect_url, 'success', 'Question deleted.');
-    } else {
-        redirect_with_status($redirect_url, 'error', 'Delete failed.');
-    }
-
-// ── SUBMIT TEST (Student only, auto-graded) ─────────────
-} else if ($action === 'submit_test') {
-    if (($_SESSION['role'] ?? '') !== 'student') {
-        redirect_with_status($dashboard_url, 'error', 'Only students can submit tests.');
-    }
-
-    $test_id = filter_var($_POST['test_id'] ?? '', FILTER_VALIDATE_INT);
-    $semail = $_SESSION['username'];
-
-    if (!$test_id) {
+    $testId = filter_var($_POST['test_id'] ?? '', FILTER_VALIDATE_INT);
+    $redirect = test_redirect((int)$testId);
+    if (!$testId || !teacher_owns_test($conn, $testId, $user)) {
         redirect_with_status($dashboard_url, 'error', 'Invalid test.');
     }
 
-    // Prevent duplicate submissions
-    $chk = $conn->prepare("SELECT id FROM mock_test_results WHERE test_id = ? AND semail = ?");
-    $chk->bind_param("is", $test_id, $semail);
-    $chk->execute();
-    if ($chk->get_result()->num_rows > 0) {
-        redirect_with_status($dashboard_url, 'error', 'You have already taken this test.');
+    $type = (string)($_POST['question_type'] ?? 'mcq');
+    $allowed = ['mcq', 'multiple_correct', 'true_false', 'fill_blank', 'subjective'];
+    if (!in_array($type, $allowed, true)) {
+        redirect_with_status($redirect, 'error', 'Invalid question type.');
+    }
+    $question = clean_string((string)($_POST['question_text'] ?? ''), 2000);
+    $marks = max(1, min(100, (int)($_POST['marks'] ?? 1)));
+    $optionA = clean_string((string)($_POST['option_a'] ?? 'True'), 255);
+    $optionB = clean_string((string)($_POST['option_b'] ?? 'False'), 255);
+    $optionC = clean_string((string)($_POST['option_c'] ?? ''), 255);
+    $optionD = clean_string((string)($_POST['option_d'] ?? ''), 255);
+    $correct = normalize_correct_answer($type, $_POST);
+
+    if ($question === '' || ($type !== 'subjective' && $correct === '')) {
+        redirect_with_status($redirect, 'error', 'Question and answer key are required.');
+    }
+    if (in_array($type, ['mcq', 'multiple_correct'], true) && (!$optionA || !$optionB || !$optionC || !$optionD)) {
+        redirect_with_status($redirect, 'error', 'All four options are required for option-based questions.');
     }
 
-    // Fetch questions and grade
-    $q_stmt = $conn->prepare("SELECT id, correct_option FROM mock_test_questions WHERE test_id = ?");
-    $q_stmt->bind_param("i", $test_id);
-    $q_stmt->execute();
-    $questions = $q_stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+    $stmt = $conn->prepare("INSERT INTO mock_test_questions (test_id, question_type, question_text, option_a, option_b, option_c, option_d, correct_option, marks) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
+    $stmt->bind_param("isssssssi", $testId, $type, $question, $optionA, $optionB, $optionC, $optionD, $correct, $marks);
+    $stmt->execute();
+    redirect_with_status($redirect, 'success', 'Question added.');
+}
 
-    $total_questions = count($questions);
-    if ($total_questions === 0) {
+if ($action === 'delete_question') {
+    if ($role !== 'teacher') {
+        redirect_with_status($dashboard_url, 'error', 'Unauthorized.');
+    }
+    $questionId = filter_var($_POST['question_id'] ?? '', FILTER_VALIDATE_INT);
+    $testId = filter_var($_POST['test_id'] ?? '', FILTER_VALIDATE_INT);
+    $redirect = test_redirect((int)$testId);
+    if (!$questionId || !$testId || !teacher_owns_test($conn, $testId, $user)) {
+        redirect_with_status($redirect, 'error', 'Invalid question.');
+    }
+    $stmt = $conn->prepare("DELETE FROM mock_test_questions WHERE id = ? AND test_id = ?");
+    $stmt->bind_param("ii", $questionId, $testId);
+    $stmt->execute();
+    redirect_with_status($redirect, 'success', 'Question deleted.');
+}
+
+if ($action === 'submit_test' || $action === 'save_test') {
+    if ($role !== 'student') {
+        redirect_with_status($dashboard_url, 'error', 'Only students can submit tests.');
+    }
+    $testId = filter_var($_POST['test_id'] ?? '', FILTER_VALIDATE_INT);
+    if (!$testId) {
+        redirect_with_status($dashboard_url, 'error', 'Invalid test.');
+    }
+
+    $chk = $conn->prepare("SELECT id FROM mock_test_results WHERE test_id = ? AND semail = ?");
+    $chk->bind_param("is", $testId, $user);
+    $chk->execute();
+    if ($chk->get_result()->num_rows > 0) {
+        redirect_with_status($dashboard_url, 'error', 'You have already submitted this test.');
+    }
+
+    $qStmt = $conn->prepare("SELECT * FROM mock_test_questions WHERE test_id = ? ORDER BY id ASC");
+    $qStmt->bind_param("i", $testId);
+    $qStmt->execute();
+    $questions = $qStmt->get_result()->fetch_all(MYSQLI_ASSOC);
+    if (!$questions) {
         redirect_with_status($dashboard_url, 'error', 'Test has no questions.');
     }
 
-    $correct_answers = 0;
+    $score = 0.0;
+    $total = 0;
+    $needsReview = false;
+    $graded = [];
     foreach ($questions as $q) {
-        $selected = $_POST['q_' . $q['id']] ?? '';
-        if ($selected === $q['correct_option']) {
-            $correct_answers++;
+        $qid = (int)$q['id'];
+        $type = $q['question_type'];
+        $marks = (int)$q['marks'];
+        $total += $marks;
+        $answer = $_POST['q_' . $qid] ?? '';
+        if (is_array($answer)) {
+            $answer = array_values(array_intersect(['A', 'B', 'C', 'D'], array_map('strtoupper', $answer)));
+            sort($answer);
+            $answer = implode(',', $answer);
+        } else {
+            $answer = trim((string)$answer);
         }
+        $isCorrect = null;
+        $awarded = 0.0;
+        if ($type === 'subjective') {
+            $needsReview = true;
+        } elseif ($type === 'fill_blank') {
+            $isCorrect = mb_strtolower($answer) === mb_strtolower((string)$q['correct_option']);
+            $awarded = $isCorrect ? $marks : 0;
+        } else {
+            $isCorrect = strtoupper($answer) === strtoupper((string)$q['correct_option']);
+            $awarded = $isCorrect ? $marks : 0;
+        }
+        $score += $awarded;
+        $graded[] = [$qid, $answer, $isCorrect, $awarded];
     }
 
-    $stmt = $conn->prepare("INSERT INTO mock_test_results (test_id, semail, score, total) VALUES (?, ?, ?, ?)");
-    $stmt->bind_param("isii", $test_id, $semail, $correct_answers, $total_questions);
+    $status = $needsReview ? 'Pending Review' : 'Evaluated';
+    $stmt = $conn->prepare("INSERT INTO mock_test_results (test_id, semail, score, total, status) VALUES (?, ?, ?, ?, ?)");
+    $stmt->bind_param("isdis", $testId, $user, $score, $total, $status);
+    $stmt->execute();
+    $resultId = (int)$conn->insert_id;
 
-    if ($stmt->execute()) {
-        $pct = $total_questions > 0 ? round(($correct_answers / $total_questions) * 100) : 0;
-        redirect_with_status($dashboard_url, 'success', "Test submitted! You scored $correct_answers/$total_questions ($pct%).");
-    } else {
-        redirect_with_status($dashboard_url, 'error', 'Failed to save test results.');
+    foreach ($graded as [$qid, $answer, $isCorrect, $awarded]) {
+        $correctValue = $isCorrect === null ? null : ($isCorrect ? 1 : 0);
+        $aStmt = $conn->prepare("INSERT INTO mock_test_answers (result_id, question_id, answer_text, is_correct, marks_awarded) VALUES (?, ?, ?, ?, ?)");
+        $aStmt->bind_param("iisid", $resultId, $qid, $answer, $correctValue, $awarded);
+        $aStmt->execute();
     }
 
-} else {
-    redirect_with_status($dashboard_url, 'error', 'Invalid action.');
+    $pct = $total > 0 ? round(($score / $total) * 100, 1) : 0;
+    $message = $needsReview ? "Submitted. Objective score is $score/$total ($pct%); subjective answers are pending teacher review." : "Test submitted! You scored $score/$total ($pct%).";
+    redirect_with_status($dashboard_url, 'success', $message);
 }
+
+if ($action === 'evaluate_answer') {
+    if ($role !== 'teacher') {
+        redirect_with_status($dashboard_url, 'error', 'Unauthorized.');
+    }
+    $answerId = filter_var($_POST['answer_id'] ?? '', FILTER_VALIDATE_INT);
+    $testId = filter_var($_POST['test_id'] ?? '', FILTER_VALIDATE_INT);
+    $marks = max(0, (float)($_POST['marks_awarded'] ?? 0));
+    $feedback = clean_string((string)($_POST['teacher_feedback'] ?? ''), 1000);
+    if (!$answerId || !$testId || !teacher_owns_test($conn, $testId, $user)) {
+        redirect_with_status($dashboard_url, 'error', 'Invalid evaluation request.');
+    }
+    $stmt = $conn->prepare("UPDATE mock_test_answers SET marks_awarded = ?, is_correct = ?, teacher_feedback = ? WHERE id = ?");
+    $isCorrect = $marks > 0 ? 1 : 0;
+    $stmt->bind_param("disi", $marks, $isCorrect, $feedback, $answerId);
+    $stmt->execute();
+
+    $totalStmt = $conn->prepare("SELECT r.id, SUM(a.marks_awarded) AS score FROM mock_test_results r JOIN mock_test_answers a ON r.id = a.result_id WHERE r.test_id = ? GROUP BY r.id");
+    $totalStmt->bind_param("i", $testId);
+    $totalStmt->execute();
+    foreach ($totalStmt->get_result()->fetch_all(MYSQLI_ASSOC) as $row) {
+        $update = $conn->prepare("UPDATE mock_test_results SET score = ?, status = 'Evaluated' WHERE id = ?");
+        $score = (float)$row['score'];
+        $rid = (int)$row['id'];
+        $update->bind_param("di", $score, $rid);
+        $update->execute();
+    }
+    redirect_with_status(test_redirect($testId), 'success', 'Subjective answer evaluated.');
+}
+
+redirect_with_status($dashboard_url, 'error', 'Invalid action.');
