@@ -214,8 +214,26 @@ if ($role === 'superadmin' || $role === 'admin') {
     // Gaps (all gaps visible to everyone)
     $gap_query = $conn->query("SELECT * FROM student_gaps ORDER BY start_date DESC");
     while ($r = $gap_query->fetch_assoc()) $all_gaps[] = $r;
+}
 
-
+$student_available_tests = [];
+$student_test_summary = ['total' => 0, 'available' => 0, 'completed' => 0];
+if ($role === 'student') {
+    $nowTs = time();
+    foreach ($all_tests as $test_item) {
+        $student_test_summary['total']++;
+        $isSubmitted = isset($test_item['score']) && $test_item['score'] !== null;
+        if ($isSubmitted) {
+            $student_test_summary['completed']++;
+            continue;
+        }
+        $notOpen = !empty($test_item['starts_at']) && $nowTs < strtotime((string)$test_item['starts_at']);
+        $closed = !empty($test_item['ends_at']) && $nowTs > strtotime((string)$test_item['ends_at']);
+        if (!$notOpen && !$closed) {
+            $student_available_tests[] = $test_item;
+            $student_test_summary['available']++;
+        }
+    }
 }
 ?>
 <!DOCTYPE html>
@@ -791,9 +809,49 @@ if ($role === 'superadmin' || $role === 'admin') {
               <span>Active Courses</span>
             </div>
             <div>
+              <strong><?php echo $student_test_summary['available']; ?></strong>
+              <span>Tests Available</span>
+            </div>
+            <div>
               <strong>₹<?php echo number_format($total_student_fees); ?></strong>
               <span>Total Fees Paid</span>
             </div>
+          </div>
+
+          <!-- Available Tests -->
+          <div class="dashboard-card">
+            <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:1rem; margin-bottom:1rem;">
+              <div>
+                <h3 style="margin:0 0 0.35rem;">My Tests</h3>
+                <p class="description" style="margin:0;">Take assigned assessments for your enrolled courses.</p>
+              </div>
+              <button type="button" class="btn btn-secondary" data-tab-trigger="tests">View All Tests</button>
+            </div>
+
+            <?php if (empty($all_tests)): ?>
+              <p style="color:var(--muted); margin:0;">No tests have been assigned to your courses yet.</p>
+            <?php elseif (empty($student_available_tests)): ?>
+              <p style="color:var(--muted); margin:0;">No tests are open right now. Completed or upcoming tests are listed under the Tests tab.</p>
+            <?php else: ?>
+              <div style="display:flex; flex-direction:column; gap:0.85rem;">
+                <?php foreach ($student_available_tests as $test_item): ?>
+                  <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:1rem; padding:1rem 1.15rem; border:1px solid var(--line); border-radius:var(--radius); background:color-mix(in srgb, var(--surface) 30%, transparent);">
+                    <div>
+                      <strong><?php echo htmlspecialchars($test_item['title']); ?></strong>
+                      <small style="display:block; color:var(--muted); margin-top:0.3rem;">
+                        Course <?php echo (int)$test_item['cid']; ?>
+                        · <?php echo (int)($test_item['duration_minutes'] ?? 30); ?> min
+                        · Pass <?php echo (int)($test_item['pass_percentage'] ?? 40); ?>%
+                        <?php if (!empty($test_item['ends_at'])): ?>
+                          · Ends <?php echo htmlspecialchars((string)$test_item['ends_at']); ?>
+                        <?php endif; ?>
+                      </small>
+                    </div>
+                    <a href="take_mcq.php?test_id=<?php echo (int)$test_item['id']; ?>" class="btn btn-primary">Take Test</a>
+                  </div>
+                <?php endforeach; ?>
+              </div>
+            <?php endif; ?>
           </div>
 
           <!-- Student Enrolled Courses -->
@@ -1205,10 +1263,30 @@ if ($role === 'superadmin' || $role === 'admin') {
       <!-- ---------------------------------------------------- -->
       <div id="tab-tests" class="tab-pane" role="tabpanel">
         <div class="dashboard-card">
-          <h3>Tests</h3>
-          <p class="description">Schedule tests, attempt assigned assessments, and review performance history.</p>
+          <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:1rem; margin-bottom:0.5rem;">
+            <div>
+              <h3 style="margin:0 0 0.35rem;">Tests</h3>
+              <p class="description" style="margin:0;">Schedule tests, attempt assigned assessments, and review performance history.</p>
+            </div>
+            <?php if ($role === 'student' && !empty($student_available_tests)): ?>
+              <span class="role-badge role-admin"><?php echo count($student_available_tests); ?> open now</span>
+            <?php endif; ?>
+          </div>
 
-          <?php if ($role !== 'student'): ?>
+          <?php if ($role === 'student'): ?>
+            <?php if (!empty($student_available_tests)): ?>
+              <div style="display:flex; flex-direction:column; gap:0.75rem; margin:1.25rem 0 1.5rem; padding:1rem; border:1px solid var(--line); border-radius:var(--radius); background:color-mix(in srgb, var(--primary) 6%, transparent);">
+                <strong style="font-size:0.95rem;">Ready to attempt</strong>
+                <div style="display:flex; flex-wrap:wrap; gap:0.65rem;">
+                  <?php foreach ($student_available_tests as $test_item): ?>
+                    <a href="take_mcq.php?test_id=<?php echo (int)$test_item['id']; ?>" class="btn btn-primary" style="font-size:0.85rem;">
+                      Take: <?php echo htmlspecialchars($test_item['title']); ?>
+                    </a>
+                  <?php endforeach; ?>
+                </div>
+              </div>
+            <?php endif; ?>
+          <?php elseif ($role !== 'student'): ?>
             <div class="metric-grid" style="margin-bottom:1.5rem;">
               <div class="metric-card"><strong><?php echo (int)($test_summary['total'] ?? 0); ?></strong><span>Total Tests</span></div>
               <div class="metric-card"><strong><?php echo (int)($test_summary['attempts'] ?? 0); ?></strong><span>Student Attempts</span></div>

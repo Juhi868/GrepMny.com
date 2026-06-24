@@ -23,7 +23,8 @@ try {
 
 // Data fetching
 $my_courses = [];
-$my_assignments = [];
+$my_tests = [];
+$test_progress_summary = ['assigned' => 0, 'completed' => 0, 'avg_pct' => 0.0, 'passed' => 0];
 
 if ($role === 'student') {
     // Fetch Enrolled Courses
@@ -33,19 +34,41 @@ if ($role === 'student') {
     $res = $enr_stmt->get_result();
     while ($r = $res->fetch_assoc()) $my_courses[] = $r;
     
-    // Fetch Assignments Progress
     $cids = array_unique(array_column($my_courses, 'cid'));
     if (!empty($cids)) {
         $in_clause = implode(',', array_fill(0, count($cids), '?'));
         $types = str_repeat('i', count($cids));
-        
-        $asn_stmt = $conn->prepare("SELECT a.title, a.due_date, sa.status, sa.score, sa.feedback FROM assignments a LEFT JOIN student_assignments sa ON a.id = sa.assignment_id AND sa.semail = ? WHERE a.cid IN ($in_clause) ORDER BY a.due_date DESC");
-        $bind_params = array_merge([$username], $cids);
-        $bind_types = 's' . $types;
-        $asn_stmt->bind_param($bind_types, ...$bind_params);
-        $asn_stmt->execute();
-        $res2 = $asn_stmt->get_result();
-        while ($r = $res2->fetch_assoc()) $my_assignments[] = $r;
+
+        // Fetch Mock Test Progress
+        $test_stmt = $conn->prepare("SELECT mt.id, mt.title, mt.cid, mt.pass_percentage, mt.starts_at, mt.ends_at, mt.duration_minutes,
+            mtr.score, mtr.total, mtr.status AS result_status, mtr.submitted_at, mtr.feedback
+            FROM mock_tests mt
+            LEFT JOIN mock_test_results mtr ON mt.id = mtr.test_id AND mtr.semail = ?
+            WHERE mt.cid IN ($in_clause)
+            AND (mt.assigned_students IS NULL OR mt.assigned_students = '' OR FIND_IN_SET(?, REPLACE(mt.assigned_students, ' ', '')) > 0)
+            ORDER BY COALESCE(mtr.submitted_at, mt.starts_at, mt.created_at) DESC");
+        $test_bind_params = array_merge([$username], $cids, [$username]);
+        $test_bind_types = 's' . $types . 's';
+        $test_stmt->bind_param($test_bind_types, ...$test_bind_params);
+        $test_stmt->execute();
+        $test_res = $test_stmt->get_result();
+        $pct_sum = 0.0;
+        while ($r = $test_res->fetch_assoc()) {
+            $my_tests[] = $r;
+            $test_progress_summary['assigned']++;
+            $isSubmitted = isset($r['score']) && $r['score'] !== null;
+            if ($isSubmitted) {
+                $test_progress_summary['completed']++;
+                $pct = (int)$r['total'] > 0 ? ((float)$r['score'] / (int)$r['total']) * 100 : 0;
+                $pct_sum += $pct;
+                if ($pct >= (int)($r['pass_percentage'] ?? 40)) {
+                    $test_progress_summary['passed']++;
+                }
+            }
+        }
+        if ($test_progress_summary['completed'] > 0) {
+            $test_progress_summary['avg_pct'] = round($pct_sum / $test_progress_summary['completed'], 1);
+        }
     }
 }
 ?>
@@ -336,6 +359,42 @@ if ($role === 'student') {
       background: var(--card-subtle);
     }
 
+    .progress-summary {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 0.85rem;
+      margin-bottom: 1.25rem;
+    }
+
+    .progress-stat {
+      border: 0.5px solid var(--line);
+      border-radius: var(--radius);
+      padding: 0.85rem 1rem;
+      background: var(--card-subtle);
+    }
+
+    .progress-stat strong {
+      display: block;
+      font-size: 1.35rem;
+      line-height: 1.1;
+      margin-bottom: 0.25rem;
+    }
+
+    .progress-stat span {
+      color: var(--muted);
+      font-size: 0.82rem;
+      font-weight: 700;
+    }
+
+    .progress-block + .progress-block {
+      margin-top: 1.5rem;
+    }
+
+    .progress-block h3 {
+      margin: 0 0 0.75rem;
+      font-size: 0.95rem;
+    }
+
     .danger-card {
       border-color: rgba(153, 27, 27, 0.3);
     }
@@ -454,34 +513,81 @@ if ($role === 'student') {
       <div class="section-head">
         <h2 id="progress-title"><?php echo tabler_icon('chart'); ?> Progress</h2>
       </div>
-      <?php if (empty($my_assignments)): ?>
-        <p class="empty">No progress data available.</p>
+
+      <?php if (empty($my_tests)): ?>
+        <p class="empty">No test progress available yet.</p>
       <?php else: ?>
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Assignment</th>
-                <th>Due Date</th>
-                <th>Status</th>
-                <th>Score</th>
-              </tr>
-            </thead>
-            <tbody>
-              <?php foreach ($my_assignments as $a): ?>
-              <?php
-                $status = $a['status'] ?? 'Pending';
-                $statusClass = $status === 'Graded' ? 'badge-green' : ($status === 'Submitted' ? 'badge-yellow' : 'badge-red');
-              ?>
-              <tr>
-                <td><strong><?php echo htmlspecialchars($a['title']); ?></strong></td>
-                <td><?php echo htmlspecialchars($a['due_date']); ?></td>
-                <td><span class="badge <?php echo $statusClass; ?>"><?php echo htmlspecialchars($status); ?></span></td>
-                <td><strong><?php echo $a['score'] !== null ? htmlspecialchars((string) $a['score']) . '/100' : '-'; ?></strong></td>
-              </tr>
-              <?php endforeach; ?>
-            </tbody>
-          </table>
+        <div class="progress-summary" aria-label="Test progress summary">
+          <div class="progress-stat">
+            <strong><?php echo (int)$test_progress_summary['completed']; ?>/<?php echo (int)$test_progress_summary['assigned']; ?></strong>
+            <span>Tests Completed</span>
+          </div>
+          <div class="progress-stat">
+            <strong><?php echo $test_progress_summary['avg_pct']; ?>%</strong>
+            <span>Average Test Score</span>
+          </div>
+          <div class="progress-stat">
+            <strong><?php echo (int)$test_progress_summary['passed']; ?></strong>
+            <span>Tests Passed</span>
+          </div>
+        </div>
+
+        <div class="progress-block">
+          <h3>Test Results</h3>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Test</th>
+                  <th>Course</th>
+                  <th>Status</th>
+                  <th>Score</th>
+                  <th>Submitted</th>
+                </tr>
+              </thead>
+              <tbody>
+                <?php foreach ($my_tests as $t): ?>
+                <?php
+                  $isSubmitted = isset($t['score']) && $t['score'] !== null;
+                  $nowTs = time();
+                  $notOpen = !empty($t['starts_at']) && $nowTs < strtotime((string)$t['starts_at']);
+                  $closed = !empty($t['ends_at']) && $nowTs > strtotime((string)$t['ends_at']);
+                  if ($isSubmitted) {
+                      $status = (string)($t['result_status'] ?? 'Submitted');
+                      $statusClass = $status === 'Pending Review' ? 'badge-yellow' : 'badge-green';
+                  } elseif ($notOpen) {
+                      $status = 'Scheduled';
+                      $statusClass = 'badge-yellow';
+                  } elseif ($closed) {
+                      $status = 'Missed';
+                      $statusClass = 'badge-red';
+                  } else {
+                      $status = 'Available';
+                      $statusClass = 'badge-yellow';
+                  }
+                  $pct = $isSubmitted && (int)$t['total'] > 0
+                      ? round(((float)$t['score'] / (int)$t['total']) * 100, 1)
+                      : null;
+                  $passed = $pct !== null && $pct >= (int)($t['pass_percentage'] ?? 40);
+                ?>
+                <tr>
+                  <td><strong><?php echo htmlspecialchars($t['title']); ?></strong></td>
+                  <td>CID <?php echo (int)$t['cid']; ?></td>
+                  <td><span class="badge <?php echo $statusClass; ?>"><?php echo htmlspecialchars($status); ?></span></td>
+                  <td>
+                    <?php if ($isSubmitted): ?>
+                      <strong><?php echo htmlspecialchars((string)$t['score']); ?>/<?php echo (int)$t['total']; ?> (<?php echo $pct; ?>%)</strong>
+                      <span class="badge <?php echo $passed ? 'badge-green' : 'badge-red'; ?>" style="margin-left:0.35rem;"><?php echo $passed ? 'Pass' : 'Fail'; ?></span>
+                    <?php else: ?>
+                      -
+                    <?php endif; ?>
+                  </td>
+                  <td><?php echo !empty($t['submitted_at']) ? htmlspecialchars((string)$t['submitted_at']) : '-'; ?></td>
+                </tr>
+                <?php endforeach; ?>
+              </tbody>
+            </table>
+          </div>
         </div>
       <?php endif; ?>
     </section>
