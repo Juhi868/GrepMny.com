@@ -3,7 +3,7 @@ declare(strict_types=1);
 date_default_timezone_set('Asia/Kolkata');
 
 const APP_HOME = '../../src/grepMny.html';
-const APP_LOGIN = '../../index.html';
+const APP_LOGIN = '../../index.php';
 
 function db(): mysqli
 {

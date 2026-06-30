@@ -3,7 +3,7 @@ declare(strict_types=1);
 session_start();
 
 if (!isset($_SESSION['userid'])) {
-    header('Location: ../../index.html');
+    header('Location: ../../index.php');
     exit;
 }
 

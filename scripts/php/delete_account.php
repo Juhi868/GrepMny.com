@@ -4,7 +4,7 @@ session_start();
 require_once __DIR__ . '/config.php';
 
 if (!isset($_SESSION['userid']) || !isset($_SESSION['username'])) {
-    header('Location: ../../index.html');
+    header('Location: ../../index.php');
     exit;
 }
 
@@ -50,7 +50,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $conn->commit();
         
         session_destroy();
-        header('Location: ../../index.html?msg=Account+deleted');
+        header('Location: ../../index.php?msg=Account+deleted');
         exit;
     } catch (Exception $e) {
         $conn->rollback();
