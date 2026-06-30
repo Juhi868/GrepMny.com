@@ -152,4 +152,46 @@
     patternInput.addEventListener("input", renderPatternResults);
     renderPatternResults();
   }
+
+  const coursePicker = document.querySelector("[data-course-picker]");
+  const courseIdInput = document.querySelector("#cid");
+  const initCoursePicker = (courses) => {
+    if (!coursePicker) return;
+    coursePicker.innerHTML = '<option value="">Select a course</option>';
+    courses.forEach((course) => {
+      const option = document.createElement("option");
+      option.value = course.cname;
+      option.dataset.cid = String(course.cid);
+      option.textContent = course.cname;
+      coursePicker.appendChild(option);
+    });
+  };
+
+  const syncCourseId = () => {
+    if (!coursePicker || !courseIdInput) return;
+    const selected = coursePicker.options[coursePicker.selectedIndex];
+    courseIdInput.value = selected?.dataset.cid || "";
+  };
+
+  if (coursePicker) {
+    fetch("../scripts/php/get_courses.php")
+      .then((response) => response.json())
+      .then((data) => initCoursePicker(data.courses || []))
+      .catch(() => {
+        coursePicker.innerHTML = '<option value="">Unable to load courses</option>';
+      });
+    coursePicker.addEventListener("change", syncCourseId);
+  }
+
+  document.querySelectorAll("[data-course-map]").forEach((select) => {
+    const cidField = document.querySelector(select.dataset.cidTarget || "#test-cid");
+    const syncMappedCourse = () => {
+      const selected = select.options[select.selectedIndex];
+      if (cidField) {
+        cidField.value = selected?.dataset.cid || "";
+      }
+    };
+    select.addEventListener("change", syncMappedCourse);
+    syncMappedCourse();
+  });
 }());

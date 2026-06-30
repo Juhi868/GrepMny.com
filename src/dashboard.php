@@ -139,7 +139,6 @@ if ($role === 'superadmin' || $role === 'admin') {
 $all_resources = [];
 $all_tests = [];
 $test_summary = ['total' => 0, 'attempts' => 0, 'avg_score' => 0.0, 'pending_review' => 0];
-$all_gaps = [];
 $student_names = [];
 $student_display_name = $userid ?: $username;
 
@@ -151,6 +150,52 @@ while ($row = $student_names_query->fetch_assoc()) {
 }
 $student_display_name = $student_names[$username] ?? $student_display_name;
 
+$all_courses = [];
+$courses_query = $conn->query('SELECT cid, cname FROM courses ORDER BY cname ASC');
+while ($row = $courses_query->fetch_assoc()) {
+    $all_courses[] = $row;
+}
+
+$all_timetables = [];
+$timetables_query = $conn->query(
+    'SELECT tt.*, c.cname FROM course_timetables tt
+     JOIN courses c ON c.cid = tt.cid
+     ORDER BY tt.cid ASC, tt.day_of_week ASC, tt.start_time ASC'
+);
+while ($row = $timetables_query->fetch_assoc()) {
+    $all_timetables[] = $row;
+}
+
+$all_gaps = [];
+if ($role === 'student') {
+    $gap_stmt = $conn->prepare('SELECT * FROM student_gaps WHERE semail = ? ORDER BY created_at DESC');
+    $gap_stmt->bind_param('s', $username);
+    $gap_stmt->execute();
+    $gap_res = $gap_stmt->get_result();
+    while ($r = $gap_res->fetch_assoc()) {
+        $all_gaps[] = $r;
+    }
+} elseif ($role === 'teacher') {
+    $gap_stmt = $conn->prepare(
+        'SELECT DISTINCT sg.* FROM student_gaps sg
+         INNER JOIN `student details` sd ON sd.semail COLLATE utf8mb4_unicode_ci = sg.semail COLLATE utf8mb4_unicode_ci
+         INNER JOIN course_teachers ct ON ct.cid = sd.cid
+         WHERE ct.teacher_email = ?
+         ORDER BY sg.created_at DESC'
+    );
+    $gap_stmt->bind_param('s', $username);
+    $gap_stmt->execute();
+    $gap_res = $gap_stmt->get_result();
+    while ($r = $gap_res->fetch_assoc()) {
+        $all_gaps[] = $r;
+    }
+} else {
+    $gap_query = $conn->query('SELECT * FROM student_gaps ORDER BY created_at DESC');
+    while ($r = $gap_query->fetch_assoc()) {
+        $all_gaps[] = $r;
+    }
+}
+
 
 if ($role === 'superadmin' || $role === 'admin') {
     $res_query = $conn->query("SELECT * FROM course_resources ORDER BY created_at DESC");
@@ -160,10 +205,6 @@ if ($role === 'superadmin' || $role === 'admin') {
     while ($r = $test_query->fetch_assoc()) $all_tests[] = $r;
     $summary_query = $conn->query("SELECT COUNT(DISTINCT mt.id) AS total, COUNT(r.id) AS attempts, AVG(CASE WHEN r.total > 0 THEN (r.score / r.total) * 100 END) AS avg_score, SUM(CASE WHEN r.status = 'Pending Review' THEN 1 ELSE 0 END) AS pending_review FROM mock_tests mt LEFT JOIN mock_test_results r ON r.test_id = mt.id");
     $test_summary = array_merge($test_summary, $summary_query->fetch_assoc() ?: []);
-
-    $gap_query = $conn->query("SELECT * FROM student_gaps ORDER BY start_date DESC");
-    while ($r = $gap_query->fetch_assoc()) $all_gaps[] = $r;
-
 
 } elseif ($role === 'teacher') {
     // Teachers can see all uploaded resources
@@ -179,10 +220,6 @@ if ($role === 'superadmin' || $role === 'admin') {
     $summary_stmt->bind_param("s", $username);
     $summary_stmt->execute();
     $test_summary = array_merge($test_summary, $summary_stmt->get_result()->fetch_assoc() ?: []);
-    
-    // Gaps (all gaps visible to everyone)
-    $gap_query = $conn->query("SELECT * FROM student_gaps ORDER BY start_date DESC");
-    while ($r = $gap_query->fetch_assoc()) $all_gaps[] = $r;
 } elseif ($role === 'student') {
     $student_cids = array_unique(array_column($student_enrollments, 'cid'));
     if (!empty($student_cids)) {
@@ -210,10 +247,6 @@ if ($role === 'superadmin' || $role === 'admin') {
         $test_res = $test_stmt->get_result();
         while ($r = $test_res->fetch_assoc()) $all_tests[] = $r;
     }
-
-    // Gaps (all gaps visible to everyone)
-    $gap_query = $conn->query("SELECT * FROM student_gaps ORDER BY start_date DESC");
-    while ($r = $gap_query->fetch_assoc()) $all_gaps[] = $r;
 }
 
 $student_available_tests = [];
@@ -568,6 +601,12 @@ if ($role === 'student') {
           </button>
         <?php endif; ?>
         <?php if ($role === 'superadmin' || $role === 'admin'): ?>
+          <button class="sidebar-link" data-tab-trigger="courses" role="tab" aria-selected="false">
+            Course Catalog
+          </button>
+          <button class="sidebar-link" data-tab-trigger="timetables" role="tab" aria-selected="false">
+            Timetables
+          </button>
           <button class="sidebar-link" data-tab-trigger="mappings" role="tab" aria-selected="false">
             Course Teachers
           </button>
@@ -585,7 +624,7 @@ if ($role === 'student') {
         <?php endif; ?>
         <button class="sidebar-link" data-tab-trigger="resources" role="tab" aria-selected="false">Course Resources</button>
         <button class="sidebar-link" data-tab-trigger="tests" role="tab" aria-selected="false">Tests</button>
-        <button class="sidebar-link" data-tab-trigger="gaps" role="tab" aria-selected="false">Gap Tracking</button>
+        <button class="sidebar-link" data-tab-trigger="gaps" role="tab" aria-selected="false">Gap Requests</button>
 
       </nav>
     </aside>
@@ -957,6 +996,150 @@ if ($role === 'student') {
       <?php endif; ?>
 
       <!-- ---------------------------------------------------- -->
+      <!-- COURSE CATALOG TAB (Superadmin & Admin) -->
+      <!-- ---------------------------------------------------- -->
+      <?php if ($role === 'superadmin' || $role === 'admin'): ?>
+        <div id="tab-courses" class="tab-pane" role="tabpanel">
+          <div class="dashboard-card">
+            <h3>Course Catalog</h3>
+            <p class="description">Maintain the official Course ID ↔ Course Name mapping used across registration and tests.</p>
+            <form action="../scripts/php/manage_courses.php" method="post" class="form-row-grid" style="margin-bottom:1.5rem; border-bottom:1px solid var(--line); padding-bottom:1.5rem;">
+              <input type="hidden" name="action" value="create_course">
+              <label class="field compact">
+                <span>Course ID</span>
+                <input type="number" name="cid" min="1" placeholder="105" required>
+              </label>
+              <label class="field compact">
+                <span>Course Name</span>
+                <input type="text" name="cname" maxlength="60" placeholder="Machine Learning Basics" required>
+              </label>
+              <button class="btn btn-primary" type="submit" style="min-height:3rem;">Add Course</button>
+            </form>
+            <div class="data-table-wrapper">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Course ID</th>
+                    <th>Course Name</th>
+                    <th>Update Name</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <?php if (empty($all_courses)): ?>
+                    <tr><td colspan="3" style="text-align:center; color:var(--muted);">No courses in the catalog yet.</td></tr>
+                  <?php else: foreach ($all_courses as $course): ?>
+                    <tr>
+                      <td><code><?php echo (int) $course['cid']; ?></code></td>
+                      <td><strong><?php echo htmlspecialchars($course['cname']); ?></strong></td>
+                      <td>
+                        <form action="../scripts/php/manage_courses.php" method="post" style="display:inline-flex; gap:0.5rem; align-items:center;">
+                          <input type="hidden" name="action" value="update_course">
+                          <input type="hidden" name="cid" value="<?php echo (int) $course['cid']; ?>">
+                          <input type="text" name="cname" value="<?php echo htmlspecialchars($course['cname']); ?>" maxlength="60" required style="min-width:12rem;">
+                          <button type="submit" class="btn btn-secondary" style="min-height:auto; padding:0.35rem 0.75rem; font-size:0.8rem;">Save</button>
+                        </form>
+                      </td>
+                    </tr>
+                  <?php endforeach; endif; ?>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <div id="tab-timetables" class="tab-pane" role="tabpanel">
+          <div class="dashboard-card">
+            <h3>Timetable Management</h3>
+            <p class="description">Create and assign class schedules to courses and batches.</p>
+            <form action="../scripts/php/manage_timetables.php" method="post" class="form-row-grid" id="timetable-form" style="margin-bottom:1.5rem; border-bottom:1px solid var(--line); padding-bottom:1.5rem;">
+              <input type="hidden" name="action" value="create_timetable" id="timetable-action">
+              <input type="hidden" name="id" value="" id="timetable-id">
+              <label class="field compact">
+                <span>Course</span>
+                <select name="cid" id="timetable-cid" required>
+                  <option value="">Select course</option>
+                  <?php foreach ($all_courses as $course): ?>
+                    <option value="<?php echo (int) $course['cid']; ?>"><?php echo htmlspecialchars($course['cname']); ?> (#<?php echo (int) $course['cid']; ?>)</option>
+                  <?php endforeach; ?>
+                </select>
+              </label>
+              <label class="field compact">
+                <span>Batch Name</span>
+                <input type="text" name="batch_name" id="timetable-batch" maxlength="80" placeholder="Batch A">
+              </label>
+              <label class="field compact">
+                <span>Day</span>
+                <select name="day_of_week" id="timetable-day" required>
+                  <?php foreach (['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'] as $day): ?>
+                    <option value="<?php echo $day; ?>"><?php echo $day; ?></option>
+                  <?php endforeach; ?>
+                </select>
+              </label>
+              <label class="field compact">
+                <span>Start Time</span>
+                <input type="time" name="start_time" id="timetable-start" required>
+              </label>
+              <label class="field compact">
+                <span>End Time</span>
+                <input type="time" name="end_time" id="timetable-end" required>
+              </label>
+              <label class="field compact">
+                <span>Venue</span>
+                <input type="text" name="venue" id="timetable-venue" maxlength="120" placeholder="Room 204">
+              </label>
+              <label class="field compact" style="grid-column:1 / -1;">
+                <span>Notes</span>
+                <input type="text" name="notes" id="timetable-notes" maxlength="255" placeholder="Optional session details">
+              </label>
+              <button class="btn btn-primary" type="submit" id="timetable-submit">Create Timetable Entry</button>
+              <button class="btn btn-secondary" type="button" id="timetable-reset" style="display:none;">Cancel Edit</button>
+            </form>
+            <div class="data-table-wrapper">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Course</th>
+                    <th>Batch</th>
+                    <th>Schedule</th>
+                    <th>Venue</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <?php if (empty($all_timetables)): ?>
+                    <tr><td colspan="5" style="text-align:center; color:var(--muted);">No timetables created yet.</td></tr>
+                  <?php else: foreach ($all_timetables as $tt): ?>
+                    <tr>
+                      <td><strong><?php echo htmlspecialchars($tt['cname']); ?></strong><br><small>#<?php echo (int) $tt['cid']; ?></small></td>
+                      <td><?php echo htmlspecialchars($tt['batch_name'] ?: 'All batches'); ?></td>
+                      <td><?php echo htmlspecialchars($tt['day_of_week']); ?><br><small><?php echo htmlspecialchars(substr($tt['start_time'], 0, 5)); ?> – <?php echo htmlspecialchars(substr($tt['end_time'], 0, 5)); ?></small></td>
+                      <td><?php echo htmlspecialchars($tt['venue'] ?: '—'); ?></td>
+                      <td>
+                        <button type="button" class="btn btn-secondary timetable-edit" style="min-height:auto; padding:0.35rem 0.75rem; font-size:0.8rem; margin-right:0.35rem;"
+                          data-id="<?php echo (int) $tt['id']; ?>"
+                          data-cid="<?php echo (int) $tt['cid']; ?>"
+                          data-batch="<?php echo htmlspecialchars($tt['batch_name']); ?>"
+                          data-day="<?php echo htmlspecialchars($tt['day_of_week']); ?>"
+                          data-start="<?php echo htmlspecialchars(substr($tt['start_time'], 0, 5)); ?>"
+                          data-end="<?php echo htmlspecialchars(substr($tt['end_time'], 0, 5)); ?>"
+                          data-venue="<?php echo htmlspecialchars($tt['venue']); ?>"
+                          data-notes="<?php echo htmlspecialchars((string) $tt['notes']); ?>">Edit</button>
+                        <form action="../scripts/php/manage_timetables.php" method="post" style="display:inline;" onsubmit="return confirm('Delete this timetable entry?');">
+                          <input type="hidden" name="action" value="delete_timetable">
+                          <input type="hidden" name="id" value="<?php echo (int) $tt['id']; ?>">
+                          <button type="submit" class="btn btn-secondary" style="min-height:auto; padding:0.35rem 0.75rem; font-size:0.8rem; border-color:var(--danger); color:var(--danger);">Delete</button>
+                        </form>
+                      </td>
+                    </tr>
+                  <?php endforeach; endif; ?>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      <?php endif; ?>
+
+      <!-- ---------------------------------------------------- -->
       <!-- COURSE TEACHERS TAB (Superadmin & Admin) -->
       <!-- ---------------------------------------------------- -->
       <?php if ($role === 'superadmin' || $role === 'admin'): ?>
@@ -972,17 +1155,49 @@ if ($role === 'student') {
               </label>
 
               <label class="field compact">
-                <span>Course ID</span>
-                <input type="number" name="cid" min="1" placeholder="101" required>
+                <span>Course</span>
+                <select id="mapping-course-select" required data-course-map data-cid-target="#mapping-cid-display">
+                  <option value="">Select course</option>
+                  <?php foreach ($all_courses as $course): ?>
+                    <option value="<?php echo (int) $course['cid']; ?>" data-cid="<?php echo (int) $course['cid']; ?>" data-cname="<?php echo htmlspecialchars($course['cname']); ?>"><?php echo htmlspecialchars($course['cname']); ?> (#<?php echo (int) $course['cid']; ?>)</option>
+                  <?php endforeach; ?>
+                </select>
               </label>
 
               <label class="field compact">
-                <span>Course Name</span>
-                <input type="text" name="cname" placeholder="Full Stack Web Dev" required>
+                <span>Course ID</span>
+                <input type="number" id="mapping-cid-display" readonly>
               </label>
+
+              <input type="hidden" name="cid" id="mapping-cid-hidden" value="">
+              <input type="hidden" name="cname" id="mapping-cname-hidden" value="">
 
               <button class="btn btn-primary" type="submit" style="min-height:3rem;">Map Course</button>
             </form>
+            <script>
+              document.addEventListener("DOMContentLoaded", () => {
+                const mappingSelect = document.getElementById("mapping-course-select");
+                const cnameHidden = document.getElementById("mapping-cname-hidden");
+                const cidHidden = document.getElementById("mapping-cid-hidden");
+                const cidDisplay = document.getElementById("mapping-cid-display");
+                if (!mappingSelect || !cnameHidden || !cidHidden) return;
+                const syncMapping = () => {
+                  const selected = mappingSelect.options[mappingSelect.selectedIndex];
+                  const cid = selected?.dataset.cid || "";
+                  const cname = selected?.dataset.cname || "";
+                  cidHidden.value = cid;
+                  cnameHidden.value = cname;
+                  if (cidDisplay) cidDisplay.value = cid;
+                };
+                mappingSelect.addEventListener("change", syncMapping);
+                mappingSelect.closest("form")?.addEventListener("submit", (event) => {
+                  syncMapping();
+                  if (!cidHidden.value || !cnameHidden.value) {
+                    event.preventDefault();
+                  }
+                });
+              });
+            </script>
           </div>
 
           <div class="dashboard-card">
@@ -1296,41 +1511,55 @@ if ($role === 'student') {
           <?php endif; ?>
 
           <?php if ($role === 'teacher'): ?>
-            <form action="../scripts/php/manage_mcq.php" method="post" class="form-row-grid assignment-form" style="margin-bottom:1.5rem; border-bottom:1px solid var(--line); padding-bottom:1.5rem;">
+            <form action="../scripts/php/manage_mcq.php" method="post" style="margin-bottom:1.5rem; border-bottom:1px solid var(--line); padding-bottom:1.5rem;">
               <input type="hidden" name="action" value="create_test">
-              <label class="field compact">
-                <span>Course ID</span>
-                <input type="number" name="cid" required>
-              </label>
-              <label class="field compact">
-                <span>Title</span>
-                <input type="text" name="title" required>
-              </label>
+              <div class="form-row-grid assignment-form" style="margin-bottom:1rem;">
+                <label class="field compact">
+                  <span>Course Name</span>
+                  <select name="cname" required data-course-map data-cid-target="#test-cid">
+                    <option value="">Select course</option>
+                    <?php foreach ($teacher_courses as $tc): ?>
+                      <option value="<?php echo htmlspecialchars($tc['cname']); ?>" data-cid="<?php echo (int) $tc['cid']; ?>"><?php echo htmlspecialchars($tc['cname']); ?></option>
+                    <?php endforeach; ?>
+                  </select>
+                </label>
+                <label class="field compact">
+                  <span>Course ID</span>
+                  <input type="number" id="test-cid" name="cid" readonly required>
+                </label>
+                <label class="field compact">
+                  <span>Title</span>
+                  <input type="text" name="title" required>
+                </label>
+                <label class="field compact" style="grid-column:1 / -1;">
+                  <span>Description</span>
+                  <input type="text" name="description" placeholder="Instructions or syllabus focus">
+                </label>
+                <label class="field compact">
+                  <span>Pass %</span>
+                  <input type="number" name="pass_percentage" min="0" max="100" value="40" required>
+                </label>
+              </div>
 
-              <label class="field compact">
-                <span>Starts At</span>
-                <input type="datetime-local" name="starts_at">
-              </label>
-              <label class="field compact">
-                <span>Ends At</span>
-                <input type="datetime-local" name="ends_at">
-              </label>
-              <label class="field compact">
-                <span>Duration</span>
-                <input type="number" name="duration_minutes" min="1" max="240" value="30" required>
-              </label>
-              <label class="field compact">
-                <span>Pass %</span>
-                <input type="number" name="pass_percentage" min="0" max="100" value="40" required>
-              </label>
-              <label class="field compact" style="grid-column:1 / -1;">
-                <span>Specific Student Emails</span>
-                <input type="text" name="assigned_students" placeholder="Comma-separated; leave blank for all students in course/batch">
-              </label>
-              <label class="field compact" style="grid-column:1 / -1;">
-                <span>Description</span>
-                <input type="text" name="description" placeholder="Instructions or syllabus focus">
-              </label>
+              <div class="dashboard-card" style="padding:1rem 1.15rem; margin-bottom:1rem; background:color-mix(in srgb, var(--primary) 5%, transparent);">
+                <h4 style="margin:0 0 0.75rem;">Time Configuration</h4>
+                <div class="form-row-grid assignment-form">
+                  <label class="field compact">
+                    <span>Duration (minutes)</span>
+                    <input type="number" name="duration_minutes" min="1" max="240" value="30" required>
+                  </label>
+                  <label class="field compact">
+                    <span>Start Time</span>
+                    <input type="datetime-local" name="starts_at">
+                  </label>
+                  <label class="field compact">
+                    <span>End Time</span>
+                    <input type="datetime-local" name="ends_at">
+                  </label>
+                </div>
+                <p class="description" style="margin:0.75rem 0 0;">All students enrolled in the selected course will be assigned automatically.</p>
+              </div>
+
               <button class="btn btn-primary" type="submit">Create Test</button>
             </form>
           <?php endif; ?>
@@ -1425,8 +1654,8 @@ if ($role === 'student') {
       <!-- ---------------------------------------------------- -->
       <div id="tab-gaps" class="tab-pane" role="tabpanel">
         <div class="dashboard-card">
-          <h3>Gap Tracking</h3>
-          <p class="description">Academic breaks taken by students.</p>
+          <h3>Gap Request Management</h3>
+          <p class="description">Students submit gap requests; teachers and admins approve or reject them with status tracking.</p>
 
           <?php if ($role === 'student'): ?>
           <form action="../scripts/php/manage_gaps.php" method="post" class="form-row-grid" style="margin-bottom:1.5rem; border-bottom:1px solid var(--line); padding-bottom:1.5rem;">
@@ -1448,7 +1677,7 @@ if ($role === 'student') {
               <span>Reason</span>
               <input type="text" name="reason" required>
             </label>
-            <button class="btn btn-primary" type="submit">Record Gap</button>
+            <button class="btn btn-primary" type="submit">Submit Gap Request</button>
           </form>
           <?php endif; ?>
 
@@ -1459,24 +1688,49 @@ if ($role === 'student') {
                   <th>Student Name</th>
                   <th>Dates</th>
                   <th>Reason</th>
-                  <?php if ($role !== 'student'): ?><th>Actions</th><?php endif; ?>
+                  <th>Status</th>
+                  <?php if ($role !== 'student'): ?><th>Review</th><?php endif; ?>
                 </tr>
               </thead>
               <tbody>
                 <?php if (empty($all_gaps)): ?>
-                  <tr><td colspan="4" style="text-align:center; color:var(--muted);">No gaps recorded.</td></tr>
-                <?php else: foreach ($all_gaps as $g): ?>
+                  <tr><td colspan="<?php echo $role === 'student' ? '4' : '5'; ?>" style="text-align:center; color:var(--muted);">No gap requests recorded.</td></tr>
+                <?php else: foreach ($all_gaps as $g):
+                  $gapStatus = $g['status'] ?? 'Pending';
+                  $statusClass = $gapStatus === 'Approved' ? 'role-student' : ($gapStatus === 'Rejected' ? 'role-superadmin' : 'role-admin');
+                ?>
                   <tr>
                     <td><strong><?php echo htmlspecialchars($student_names[$g['semail']] ?? $g['semail']); ?></strong></td>
                     <td><?php echo htmlspecialchars($g['start_date']); ?> to <?php echo htmlspecialchars($g['end_date']); ?></td>
                     <td><?php echo htmlspecialchars($g['reason']); ?></td>
+                    <td>
+                      <span class="role-badge <?php echo $statusClass; ?>"><?php echo htmlspecialchars($gapStatus); ?></span>
+                      <?php if (!empty($g['reviewed_by'])): ?>
+                        <br><small style="color:var(--muted);">By <?php echo htmlspecialchars($g['reviewed_by']); ?></small>
+                      <?php endif; ?>
+                      <?php if (!empty($g['review_note'])): ?>
+                        <br><small style="color:var(--muted);"><?php echo htmlspecialchars($g['review_note']); ?></small>
+                      <?php endif; ?>
+                    </td>
                     <?php if ($role !== 'student'): ?>
                       <td>
-                        <form action="../scripts/php/manage_gaps.php" method="post" onsubmit="return confirm('Delete this gap record?');">
-                          <input type="hidden" name="action" value="delete_gap">
-                          <input type="hidden" name="id" value="<?php echo $g['id']; ?>">
-                          <button type="submit" class="btn btn-secondary" style="padding:0.25rem 0.5rem; font-size:0.8rem; border-color:var(--danger); color:var(--danger);">Delete</button>
-                        </form>
+                        <?php if (($g['status'] ?? 'Pending') === 'Pending' && in_array($role, ['teacher', 'admin', 'superadmin'], true)): ?>
+                          <form action="../scripts/php/manage_gaps.php" method="post" style="display:flex; flex-direction:column; gap:0.35rem; min-width:10rem;">
+                            <input type="hidden" name="action" value="review_gap">
+                            <input type="hidden" name="id" value="<?php echo (int) $g['id']; ?>">
+                            <input type="text" name="review_note" placeholder="Optional note" maxlength="255">
+                            <div style="display:flex; gap:0.35rem;">
+                              <button type="submit" name="decision" value="Approved" class="btn btn-primary" style="padding:0.25rem 0.5rem; font-size:0.75rem;">Approve</button>
+                              <button type="submit" name="decision" value="Rejected" class="btn btn-secondary" style="padding:0.25rem 0.5rem; font-size:0.75rem; border-color:var(--danger); color:var(--danger);">Reject</button>
+                            </div>
+                          </form>
+                        <?php else: ?>
+                          <form action="../scripts/php/manage_gaps.php" method="post" onsubmit="return confirm('Delete this gap request?');">
+                            <input type="hidden" name="action" value="delete_gap">
+                            <input type="hidden" name="id" value="<?php echo (int) $g['id']; ?>">
+                            <button type="submit" class="btn btn-secondary" style="padding:0.25rem 0.5rem; font-size:0.8rem; border-color:var(--danger); color:var(--danger);">Delete</button>
+                          </form>
+                        <?php endif; ?>
                       </td>
                     <?php endif; ?>
                   </tr>
@@ -1544,6 +1798,33 @@ if ($role === 'student') {
             const searchText = row.getAttribute("data-search-text");
             row.style.display = (query === "" || searchText.includes(query)) ? "" : "none";
           });
+        });
+      }
+
+      document.querySelectorAll(".timetable-edit").forEach((button) => {
+        button.addEventListener("click", () => {
+          document.getElementById("timetable-action").value = "update_timetable";
+          document.getElementById("timetable-id").value = button.dataset.id;
+          document.getElementById("timetable-cid").value = button.dataset.cid;
+          document.getElementById("timetable-batch").value = button.dataset.batch || "";
+          document.getElementById("timetable-day").value = button.dataset.day;
+          document.getElementById("timetable-start").value = button.dataset.start;
+          document.getElementById("timetable-end").value = button.dataset.end;
+          document.getElementById("timetable-venue").value = button.dataset.venue || "";
+          document.getElementById("timetable-notes").value = button.dataset.notes || "";
+          document.getElementById("timetable-submit").textContent = "Update Timetable Entry";
+          document.getElementById("timetable-reset").style.display = "";
+          document.getElementById("tab-timetables")?.scrollIntoView({ behavior: "smooth", block: "start" });
+        });
+      });
+      const timetableReset = document.getElementById("timetable-reset");
+      if (timetableReset) {
+        timetableReset.addEventListener("click", () => {
+          document.getElementById("timetable-form")?.reset();
+          document.getElementById("timetable-action").value = "create_timetable";
+          document.getElementById("timetable-id").value = "";
+          document.getElementById("timetable-submit").textContent = "Create Timetable Entry";
+          timetableReset.style.display = "none";
         });
       }
     });

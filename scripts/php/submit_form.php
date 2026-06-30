@@ -32,6 +32,18 @@ if (!$start || !$end || $end < $start) {
 
 try {
     $conn = db();
+
+    $courseCheck = $conn->prepare('SELECT cid, cname FROM courses WHERE cid = ? LIMIT 1');
+    $courseCheck->bind_param('i', $cid);
+    $courseCheck->execute();
+    $courseRow = $courseCheck->get_result()->fetch_assoc();
+    if (!$courseRow) {
+        redirect_with_status($registryPage, 'error', 'Please select a valid course from the catalog.');
+    }
+    if (strcasecmp($courseRow['cname'], $cname) !== 0) {
+        redirect_with_status($registryPage, 'error', 'Course ID does not match the selected course name.');
+    }
+
     $stmt = $conn->prepare('INSERT INTO `student details` (sname, semail, cid, cname, duration, start_date, end_date, fees) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
     $stmt->bind_param('ssissssi', $sname, $semail, $cid, $cname, $duration, $startDate, $endDate, $fees);
     $stmt->execute();

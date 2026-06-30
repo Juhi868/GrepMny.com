@@ -63,15 +63,17 @@
         </label>
 
         <label class="field">
-          <span>Course ID</span>
-          <input type="number" id="cid" name="cid" min="1" max="999999"  required>
+          <span>Course name</span>
+          <select id="course_picker" name="cname" required data-course-picker>
+            <option value="">Loading courses…</option>
+          </select>
           <small></small>
         </label>
 
         <label class="field">
-          <span>Course name</span>
-          <input type="text" id="cname" name="cname" maxlength="60"  required>
-          <small></small>
+          <span>Course ID</span>
+          <input type="number" id="cid" name="cid" min="1" max="999999" readonly required>
+          <small>Auto-filled when you select a course.</small>
         </label>
 
         <label class="field">
