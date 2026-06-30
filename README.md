@@ -1,8 +1,3 @@
-
-# GrepMany
-
-GrepMany is a simple and modern web application designed for managing student course records. It gives you a clean and easy-to-use workspace to:
-
 # GrepMny
 
 GrepMny is a simple and modern web application designed for managing student course records. It gives you a clean and easy-to-use workspace to:
