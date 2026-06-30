@@ -32,6 +32,15 @@ CREATE TABLE IF NOT EXISTS `student details` (
   KEY `idx_course_id` (`cid`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+CREATE TABLE IF NOT EXISTS `courses` (
+  `cid` INT NOT NULL,
+  `cname` VARCHAR(60) NOT NULL,
+  `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`cid`),
+  UNIQUE KEY `unique_course_name` (`cname`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE IF NOT EXISTS `course_teachers` (
   `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
   `teacher_email` VARCHAR(80) NOT NULL,
@@ -40,6 +49,22 @@ CREATE TABLE IF NOT EXISTS `course_teachers` (
   PRIMARY KEY (`id`),
   KEY `idx_teacher_email` (`teacher_email`),
   KEY `idx_ct_cid` (`cid`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `course_timetables` (
+  `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `cid` INT NOT NULL,
+  `batch_name` VARCHAR(80) NOT NULL DEFAULT '',
+  `day_of_week` VARCHAR(20) NOT NULL,
+  `start_time` TIME NOT NULL,
+  `end_time` TIME NOT NULL,
+  `venue` VARCHAR(120) NOT NULL DEFAULT '',
+  `notes` TEXT,
+  `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_tt_cid` (`cid`),
+  KEY `idx_tt_batch` (`batch_name`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS `course_resources` (
@@ -59,9 +84,14 @@ CREATE TABLE IF NOT EXISTS `student_gaps` (
   `start_date` DATE NOT NULL,
   `end_date` DATE NOT NULL,
   `reason` TEXT,
+  `status` VARCHAR(20) NOT NULL DEFAULT 'Pending',
+  `reviewed_by` VARCHAR(80) DEFAULT NULL,
+  `reviewed_at` TIMESTAMP NULL DEFAULT NULL,
+  `review_note` TEXT,
   `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
-  KEY `idx_sg_semail` (`semail`)
+  KEY `idx_sg_semail` (`semail`),
+  KEY `idx_sg_status` (`status`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS `assignments` (

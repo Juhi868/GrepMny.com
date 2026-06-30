@@ -104,18 +104,37 @@ $message = $_GET['message'] ?? '';
 
     <section class="panel">
       <h3>Schedule & Assignment</h3>
+      <?php $assignedCount = count(array_filter(explode(',', (string) $test['assigned_students']))); ?>
       <form action="../scripts/php/manage_mcq.php" method="post" class="form-grid">
         <input type="hidden" name="action" value="update_test">
         <input type="hidden" name="test_id" value="<?php echo $test_id; ?>">
-        <label class="field compact"><span>Course ID</span><input type="number" name="cid" value="<?php echo (int)$test['cid']; ?>" required></label>
+        <label class="field compact"><span>Course Name</span>
+          <select name="cname" required data-course-map data-cid-target="#edit-test-cid">
+            <?php
+              $teacherCourses = $conn->prepare('SELECT cid, cname FROM course_teachers WHERE teacher_email = ? ORDER BY cname ASC');
+              $teacherCourses->bind_param('s', $teacher);
+              $teacherCourses->execute();
+              foreach ($teacherCourses->get_result()->fetch_all(MYSQLI_ASSOC) as $tc):
+            ?>
+              <option value="<?php echo htmlspecialchars($tc['cname']); ?>" data-cid="<?php echo (int) $tc['cid']; ?>" <?php echo (int) $tc['cid'] === (int) $test['cid'] ? 'selected' : ''; ?>><?php echo htmlspecialchars($tc['cname']); ?></option>
+            <?php endforeach; ?>
+          </select>
+        </label>
+        <label class="field compact"><span>Course ID</span><input type="number" id="edit-test-cid" name="cid" value="<?php echo (int)$test['cid']; ?>" readonly required></label>
         <label class="field compact"><span>Title</span><input type="text" name="title" value="<?php echo htmlspecialchars($test['title']); ?>" required></label>
-
-        <label class="field compact"><span>Starts At</span><input type="datetime-local" name="starts_at" value="<?php echo $test['starts_at'] ? date('Y-m-d\TH:i', strtotime($test['starts_at'])) : ''; ?>"></label>
-        <label class="field compact"><span>Ends At</span><input type="datetime-local" name="ends_at" value="<?php echo $test['ends_at'] ? date('Y-m-d\TH:i', strtotime($test['ends_at'])) : ''; ?>"></label>
-        <label class="field compact"><span>Duration Minutes</span><input type="number" min="1" max="240" name="duration_minutes" value="<?php echo (int)$test['duration_minutes']; ?>" required></label>
-        <label class="field compact"><span>Pass Percentage</span><input type="number" min="0" max="100" name="pass_percentage" value="<?php echo (int)$test['pass_percentage']; ?>" required></label>
-        <label class="field compact wide"><span>Specific Students</span><input type="text" name="assigned_students" value="<?php echo htmlspecialchars((string)$test['assigned_students']); ?>" placeholder="Comma-separated student emails; leave blank for full course/batch"></label>
         <label class="field compact wide"><span>Description</span><textarea name="description" rows="3"><?php echo htmlspecialchars((string)$test['description']); ?></textarea></label>
+        <label class="field compact"><span>Pass Percentage</span><input type="number" min="0" max="100" name="pass_percentage" value="<?php echo (int)$test['pass_percentage']; ?>" required></label>
+        <label class="field compact wide"><span>Assigned Students</span><input type="text" value="<?php echo $assignedCount; ?> enrolled student(s) — auto-assigned from course" readonly></label>
+
+        <div class="wide" style="grid-column:1 / -1; border:1px solid var(--line); border-radius:var(--radius); padding:1rem; background:color-mix(in srgb, var(--primary) 5%, transparent);">
+          <h4 style="margin:0 0 0.75rem;">Time Configuration</h4>
+          <div class="form-grid">
+            <label class="field compact"><span>Duration (minutes)</span><input type="number" min="1" max="240" name="duration_minutes" value="<?php echo (int)$test['duration_minutes']; ?>" required></label>
+            <label class="field compact"><span>Start Time</span><input type="datetime-local" name="starts_at" value="<?php echo $test['starts_at'] ? date('Y-m-d\TH:i', strtotime($test['starts_at'])) : ''; ?>"></label>
+            <label class="field compact"><span>End Time</span><input type="datetime-local" name="ends_at" value="<?php echo $test['ends_at'] ? date('Y-m-d\TH:i', strtotime($test['ends_at'])) : ''; ?>"></label>
+          </div>
+        </div>
+
         <button class="btn btn-primary" type="submit">Save Test</button>
       </form>
     </section>

@@ -61,6 +61,47 @@ try {
 
     // New Tables for Features
     $tables = [
+        "courses" => "CREATE TABLE IF NOT EXISTS `courses` (
+            `cid` INT NOT NULL,
+            `cname` VARCHAR(60) NOT NULL,
+            `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            PRIMARY KEY (`cid`),
+            UNIQUE KEY `unique_course_name` (`cname`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+
+        "course_timetables" => "CREATE TABLE IF NOT EXISTS `course_timetables` (
+            `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
+            `cid` INT NOT NULL,
+            `batch_name` VARCHAR(80) NOT NULL DEFAULT '',
+            `day_of_week` VARCHAR(20) NOT NULL,
+            `start_time` TIME NOT NULL,
+            `end_time` TIME NOT NULL,
+            `venue` VARCHAR(120) NOT NULL DEFAULT '',
+            `notes` TEXT,
+            `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            PRIMARY KEY (`id`),
+            KEY `idx_tt_cid` (`cid`),
+            KEY `idx_tt_batch` (`batch_name`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+
+        "student_gaps" => "CREATE TABLE IF NOT EXISTS `student_gaps` (
+            `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
+            `semail` VARCHAR(80) NOT NULL,
+            `start_date` DATE NOT NULL,
+            `end_date` DATE NOT NULL,
+            `reason` TEXT,
+            `status` VARCHAR(20) NOT NULL DEFAULT 'Pending',
+            `reviewed_by` VARCHAR(80) DEFAULT NULL,
+            `reviewed_at` TIMESTAMP NULL DEFAULT NULL,
+            `review_note` TEXT,
+            `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (`id`),
+            KEY `idx_sg_semail` (`semail`),
+            KEY `idx_sg_status` (`status`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
+
         "course_resources" => "CREATE TABLE IF NOT EXISTS `course_resources` (
             `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
             `cid` INT NOT NULL,
@@ -203,6 +244,10 @@ try {
     $addColumnIfMissing($conn, 'mock_test_questions', 'marks', '`marks` INT NOT NULL DEFAULT 1 AFTER `correct_option`');
     $addColumnIfMissing($conn, 'mock_test_results', 'status', "`status` VARCHAR(30) NOT NULL DEFAULT 'Submitted' AFTER `total`");
     $addColumnIfMissing($conn, 'mock_test_results', 'feedback', '`feedback` TEXT AFTER `status`');
+    $addColumnIfMissing($conn, 'student_gaps', 'status', "`status` VARCHAR(20) NOT NULL DEFAULT 'Pending' AFTER `reason`");
+    $addColumnIfMissing($conn, 'student_gaps', 'reviewed_by', '`reviewed_by` VARCHAR(80) DEFAULT NULL AFTER `status`');
+    $addColumnIfMissing($conn, 'student_gaps', 'reviewed_at', '`reviewed_at` TIMESTAMP NULL DEFAULT NULL AFTER `reviewed_by`');
+    $addColumnIfMissing($conn, 'student_gaps', 'review_note', '`review_note` TEXT AFTER `reviewed_at`');
     $conn->query("ALTER TABLE `mock_test_results` MODIFY COLUMN `score` DECIMAL(8,2) NOT NULL DEFAULT 0");
     $conn->query("ALTER TABLE `mock_test_results` MODIFY COLUMN `total` INT NOT NULL DEFAULT 0");
     $conn->query("ALTER TABLE `mock_test_questions` MODIFY COLUMN `option_a` VARCHAR(255) NOT NULL DEFAULT ''");
@@ -262,6 +307,24 @@ try {
         $conn->query("ALTER TABLE `student_assignments` MODIFY COLUMN `total` INT DEFAULT 0");
     }
     $conn->query("ALTER TABLE `student_assignments` MODIFY COLUMN `submitted_at` TIMESTAMP NULL DEFAULT NULL");
+
+    // Seed courses catalog from known course data
+    $seedCourses = [
+        ['cid' => 101, 'cname' => 'Data Analytics'],
+        ['cid' => 102, 'cname' => 'Python Foundations'],
+        ['cid' => 103, 'cname' => 'UX Research'],
+        ['cid' => 104, 'cname' => 'Cloud Security'],
+    ];
+    foreach ($seedCourses as $course) {
+        $stmt = $conn->prepare("INSERT INTO courses (cid, cname) VALUES (?, ?) ON DUPLICATE KEY UPDATE cname = VALUES(cname)");
+        $stmt->bind_param("is", $course['cid'], $course['cname']);
+        $stmt->execute();
+    }
+    echo "Seeded courses catalog." . (php_sapi_name() === 'cli' ? "\n" : "<br>\n");
+
+    // Backfill courses from enrollments and teacher mappings
+    $conn->query("INSERT IGNORE INTO courses (cid, cname) SELECT DISTINCT cid, cname FROM `student details`");
+    $conn->query("INSERT IGNORE INTO courses (cid, cname) SELECT DISTINCT cid, cname FROM course_teachers");
 
     // 4. Seed mock courses and teacher assignments
     $mockTeachers = [

@@ -28,6 +28,42 @@ function teacher_owns_test(mysqli $conn, int $testId, string $teacherEmail): boo
     return $stmt->get_result()->num_rows > 0;
 }
 
+function enrolled_student_emails(mysqli $conn, int $cid): string
+{
+    $stmt = $conn->prepare("SELECT DISTINCT semail FROM `student details` WHERE cid = ? ORDER BY semail ASC");
+    $stmt->bind_param("i", $cid);
+    $stmt->execute();
+    $emails = array_column($stmt->get_result()->fetch_all(MYSQLI_ASSOC), 'semail');
+    return implode(',', $emails);
+}
+
+function resolve_course(mysqli $conn, int $cid, string $cname = ''): ?array
+{
+    if ($cname !== '') {
+        $stmt = $conn->prepare('SELECT cid, cname FROM courses WHERE cname = ? LIMIT 1');
+        $stmt->bind_param('s', $cname);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+        if ($row) {
+            return ['cid' => (int) $row['cid'], 'cname' => $row['cname']];
+        }
+    }
+
+    $stmt = $conn->prepare('SELECT cid, cname FROM courses WHERE cid = ? LIMIT 1');
+    $stmt->bind_param('i', $cid);
+    $stmt->execute();
+    $row = $stmt->get_result()->fetch_assoc();
+    if (!$row) {
+        return null;
+    }
+
+    if ($cname !== '' && strcasecmp($row['cname'], $cname) !== 0) {
+        return null;
+    }
+
+    return ['cid' => (int) $row['cid'], 'cname' => $row['cname']];
+}
+
 function normalize_correct_answer(string $type, array $post): string
 {
     if ($type === 'multiple_correct') {
@@ -53,17 +89,35 @@ if ($action === 'create_test' || $action === 'update_test') {
     }
 
     $cid = filter_var($_POST['cid'] ?? '', FILTER_VALIDATE_INT);
+    $cname = clean_string((string) ($_POST['cname'] ?? ''), 60);
     $title = clean_string((string)($_POST['title'] ?? ''), 100);
     $description = clean_string((string)($_POST['description'] ?? ''), 1000);
 
-    $assignedStudents = clean_string((string)($_POST['assigned_students'] ?? ''), 2000);
     $startsAt = trim((string)($_POST['starts_at'] ?? '')) ?: null;
     $endsAt = trim((string)($_POST['ends_at'] ?? '')) ?: null;
     $duration = max(1, min(240, (int)($_POST['duration_minutes'] ?? 30)));
     $pass = max(0, min(100, (int)($_POST['pass_percentage'] ?? 40)));
 
-    if (!$cid || $title === '') {
-        redirect_with_status($dashboard_url, 'error', 'Course ID and title are required.');
+    $course = $cid ? resolve_course($conn, (int) $cid, $cname) : null;
+    if (!$course) {
+        redirect_with_status($dashboard_url, 'error', 'Select a valid course from the catalog.');
+    }
+    $cid = $course['cid'];
+
+    if ($title === '') {
+        redirect_with_status($dashboard_url, 'error', 'Test title is required.');
+    }
+
+    $teacherCourse = $conn->prepare('SELECT id FROM course_teachers WHERE teacher_email = ? AND cid = ? LIMIT 1');
+    $teacherCourse->bind_param('si', $user, $cid);
+    $teacherCourse->execute();
+    if ($teacherCourse->get_result()->num_rows === 0) {
+        redirect_with_status($dashboard_url, 'error', 'You can create tests only for your assigned courses.');
+    }
+
+    $assignedStudents = enrolled_student_emails($conn, $cid);
+    if ($assignedStudents === '') {
+        redirect_with_status($dashboard_url, 'error', 'No students are enrolled in the selected course.');
     }
 
     if ($action === 'update_test') {
@@ -80,7 +134,8 @@ if ($action === 'create_test' || $action === 'update_test') {
     $stmt = $conn->prepare("INSERT INTO mock_tests (cid, teacher_email, title, description, assigned_students, starts_at, ends_at, duration_minutes, pass_percentage) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
     $stmt->bind_param("issssssii", $cid, $user, $title, $description, $assignedStudents, $startsAt, $endsAt, $duration, $pass);
     $stmt->execute();
-    redirect_with_status(test_redirect((int)$conn->insert_id), 'success', 'Test created. Add questions to publish it.');
+    $studentCount = count(array_filter(explode(',', $assignedStudents)));
+    redirect_with_status(test_redirect((int)$conn->insert_id), 'success', "Test created with {$studentCount} enrolled student(s) assigned. Add questions to publish it.");
 }
 
 if ($action === 'delete_test') {

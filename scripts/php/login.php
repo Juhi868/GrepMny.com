@@ -45,7 +45,7 @@ try {
     $_SESSION['userid'] = $user['userid'];
     $_SESSION['role'] = $user['role'];
 
-    redirect_with_status(APP_HOME, 'success', 'Logged in successfully.');
+    redirect_with_status('../../src/dashboard.php', 'success', 'Logged in successfully.');
 } catch (mysqli_sql_exception $error) {
     error_log($error->getMessage());
     redirect_with_status(APP_LOGIN, 'error', 'Unable to connect right now. Please try again.');
