@@ -15,7 +15,7 @@ if (!$email || $password === '') {
 
 try {
     $conn = db();
-    $stmt = $conn->prepare('SELECT email, passwd, userid, role FROM login WHERE email = ? LIMIT 1');
+    $stmt = $conn->prepare('SELECT email, passwd, userid, role, has_logged_in FROM login WHERE email = ? LIMIT 1');
     $stmt->bind_param('s', $email);
     $stmt->execute();
     $result = $stmt->get_result();
@@ -45,8 +45,19 @@ try {
     $_SESSION['userid'] = $user['userid'];
     $_SESSION['role'] = $user['role'];
 
+    // First-time login: show front page, then mark as logged in
+    $hasLoggedIn = (int) ($user['has_logged_in'] ?? 0);
+    if ($hasLoggedIn === 0) {
+        $flagStmt = $conn->prepare('UPDATE login SET has_logged_in = 1 WHERE email = ?');
+        $flagStmt->bind_param('s', $email);
+        $flagStmt->execute();
+        redirect_with_status('../../src/grepMny.php', 'success', 'Welcome to GrepMny! Explore the workspace.');
+    }
+
+    // Returning user: go straight to dashboard
     redirect_with_status('../../src/dashboard.php', 'success', 'Logged in successfully.');
 } catch (mysqli_sql_exception $error) {
     error_log($error->getMessage());
     redirect_with_status(APP_LOGIN, 'error', 'Unable to connect right now. Please try again.');
 }
+

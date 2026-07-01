@@ -25,7 +25,7 @@ if (isset($_SESSION['username'])) {
   <a class="skip-link" href="#login-form">Skip to login</a>
   <main class="auth-shell">
     <section class="auth-visual" aria-labelledby="brand-title">
-      <a class="brand-mark" href="./src/grepMny.html" aria-label="GrepMny home">
+      <a class="brand-mark" href="./src/grepMny.php" aria-label="GrepMny home">
         <span>GM</span>
         <strong>GrepMny</strong>
       </a>

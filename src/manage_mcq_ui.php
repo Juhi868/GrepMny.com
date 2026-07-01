@@ -128,10 +128,36 @@ $message = $_GET['message'] ?? '';
 
         <div class="wide" style="grid-column:1 / -1; border:1px solid var(--line); border-radius:var(--radius); padding:1rem; background:color-mix(in srgb, var(--primary) 5%, transparent);">
           <h4 style="margin:0 0 0.75rem;">Time Configuration</h4>
-          <div class="form-grid">
-            <label class="field compact"><span>Duration (minutes)</span><input type="number" min="1" max="240" name="duration_minutes" value="<?php echo (int)$test['duration_minutes']; ?>" required></label>
-            <label class="field compact"><span>Start Time</span><input type="datetime-local" name="starts_at" value="<?php echo $test['starts_at'] ? date('Y-m-d\TH:i', strtotime($test['starts_at'])) : ''; ?>"></label>
-            <label class="field compact"><span>End Time</span><input type="datetime-local" name="ends_at" value="<?php echo $test['ends_at'] ? date('Y-m-d\TH:i', strtotime($test['ends_at'])) : ''; ?>"></label>
+
+          <div class="form-grid" style="margin-bottom:1rem;">
+            <label class="field compact">
+              <span>Test Duration (minutes)</span>
+              <input type="number" min="1" max="240" name="duration_minutes" value="<?php echo (int)$test['duration_minutes']; ?>" required>
+            </label>
+          </div>
+
+          <p style="margin:0 0 0.65rem; font-weight:600; font-size:0.9rem; color:var(--muted);">Exam Start</p>
+          <div class="time-input-group" style="margin-bottom:1rem;">
+            <label class="field compact">
+              <span>Start Date</span>
+              <input type="date" name="starts_at_date" value="<?php echo $test['starts_at'] ? date('Y-m-d', strtotime($test['starts_at'])) : ''; ?>">
+            </label>
+            <label class="field compact">
+              <span>Start Time</span>
+              <input type="time" name="starts_at_time" value="<?php echo $test['starts_at'] ? date('H:i', strtotime($test['starts_at'])) : ''; ?>">
+            </label>
+          </div>
+
+          <p style="margin:0 0 0.65rem; font-weight:600; font-size:0.9rem; color:var(--muted);">Exam End</p>
+          <div class="time-input-group" style="margin-bottom:0;">
+            <label class="field compact">
+              <span>End Date</span>
+              <input type="date" name="ends_at_date" value="<?php echo $test['ends_at'] ? date('Y-m-d', strtotime($test['ends_at'])) : ''; ?>">
+            </label>
+            <label class="field compact">
+              <span>End Time</span>
+              <input type="time" name="ends_at_time" value="<?php echo $test['ends_at'] ? date('H:i', strtotime($test['ends_at'])) : ''; ?>">
+            </label>
           </div>
         </div>
 

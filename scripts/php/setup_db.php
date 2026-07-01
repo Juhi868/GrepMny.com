@@ -20,6 +20,16 @@ try {
         echo "'role' column already exists in 'login' table." . (php_sapi_name() === 'cli' ? "\n" : "<br>\n");
     }
 
+    // 1b. Alter login table to add has_logged_in
+    $result = $conn->query("SHOW COLUMNS FROM `login` LIKE 'has_logged_in'");
+    if ($result->num_rows === 0) {
+        $conn->query("ALTER TABLE `login` ADD COLUMN `has_logged_in` TINYINT(1) NOT NULL DEFAULT 0");
+        $conn->query("UPDATE `login` SET `has_logged_in` = 1"); // Mark existing users as logged in
+        echo "Added 'has_logged_in' column to 'login' table." . (php_sapi_name() === 'cli' ? "\n" : "<br>\n");
+    } else {
+        echo "'has_logged_in' column already exists in 'login' table." . (php_sapi_name() === 'cli' ? "\n" : "<br>\n");
+    }
+
     // 2. Create course_teachers table if not exists
     $conn->query("CREATE TABLE IF NOT EXISTS `course_teachers` (
         `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,

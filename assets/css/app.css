@@ -922,3 +922,58 @@ code {
     font-size: 2.45rem;
   }
 }
+
+/* ── Time input group (date + time with clock icon) ── */
+
+.time-input-group {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.5rem;
+}
+
+.time-input-group .field {
+  flex: 1;
+  min-width: 0;
+  margin-bottom: 0;
+}
+
+.time-input-group .field input {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.time-input-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 2.5rem;
+  height: 3rem;
+  color: var(--primary);
+  transition: color 0.2s, transform 0.2s;
+}
+
+.time-input-icon svg {
+  width: 1.35rem;
+  height: 1.35rem;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.time-input-icon:hover {
+  color: var(--primary-strong);
+  transform: scale(1.08);
+}
+
+@media (max-width: 640px) {
+  .time-input-group {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .time-input-icon {
+    align-self: flex-start;
+  }
+}

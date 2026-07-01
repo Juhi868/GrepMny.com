@@ -1,0 +1,141 @@
+<?php
+declare(strict_types=1);
+session_start();
+require_once __DIR__ . '/../scripts/php/config.php';
+
+// Only authenticated users may see the front page
+if (!isset($_SESSION['username'])) {
+    header('Location: ../index.php');
+    exit;
+}
+?>
+<!DOCTYPE html>
+<html lang="en" data-page="home">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="GrepMny is a modern search and student registry workspace for finding records, testing patterns, and managing course data.">
+  <meta name="theme-color" content="#f7f4ed">
+  <title>GrepMny | Search Workspace</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+  <link href="../assets/css/app.css" rel="stylesheet">
+</head>
+<body>
+  <a class="skip-link" href="#main-content">Skip to content</a>
+  <header class="site-header" data-header>
+    <nav class="nav-wrap" aria-label="Primary navigation">
+      <a class="brand-mark" href="./grepMny.php" aria-label="GrepMny home">
+        <span>GM</span>
+        <strong>GrepMny</strong>
+      </a>
+      <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="site-menu" data-menu-toggle>
+        <span></span><span></span><span></span>
+        <em>Menu</em>
+      </button>
+      <div id="site-menu" class="site-menu" data-menu>
+        <a href="#about">About</a>
+        <a href="#features">Features</a>
+        <a href="#workflow">Workflow</a>
+        <a href="./dashboard.php"  font-weight:800;>Dashboard</a>
+        <a href="./data.html">Registry</a>
+        <a href="./profile.php">View Profile</a>
+        <a href="../scripts/php/logout.php">Sign out</a>
+      </div>
+      <div class="nav-actions">
+        <button class="theme-toggle" type="button" aria-label="Toggle dark mode" data-theme-toggle></button>
+      </div>
+    </nav>
+  </header>
+
+  <main id="main-content">
+    <section class="hero-section">
+      <div class="hero-content">
+        <p class="eyebrow">Production-ready registry workspace</p>
+        <h1>Easily search, manage, and organize course records in one place.</h1>
+        <p>Designed for efficiency, GrepMny helps manage students, courses, and enrollments through a modern dashboard, secure workflows, and easy-to-use search features.</p>
+        <div class="hero-actions">
+          <a class="btn btn-primary" href="./dashboard.php">Go to Dashboard</a>
+          <a class="btn btn-secondary" href="./data.html">Open Registry</a>
+        </div>
+        <div class="metric-grid" aria-label="Workspace highlights">
+          <div><strong>3</strong><span>Core pages</span></div>
+          <div><strong>100%</strong><span>Responsive layout</span></div>
+          <div><strong>0</strong><span>Duplicate documents</span></div>
+        </div>
+      </div>
+      <div class="hero-media" aria-label="GrepMny command preview">
+        <img src="../media/city1.jpg" alt="City skyline representing a connected data workspace" loading="eager">
+        
+      </div>
+    </section>
+
+    <section id="about" class="content-band">
+      <div class="section-kicker">About</div>
+      <div class="section-split">
+        <h2>Built for quick searches and clean student course records.</h2>
+        <p>GrepMny started as a login, homepage, and student information form. The upgraded version turns that into a polished workspace with safer forms, stronger visual hierarchy, better mobile behavior, and clearer paths from sign in to registry submission.</p>
+      </div>
+    </section>
+
+    <section id="features" class="feature-section">
+      <div class="section-heading">
+        <p class="eyebrow">What improved</p>
+        <h2>Useful features, not just prettier screens.</h2>
+      </div>
+      <div class="card-grid">
+        <article class="info-card">
+          <span class="card-icon">01</span>
+          <h3>Theme-aware interface</h3>
+          <p>Light and dark modes are saved locally and applied across login, signup, dashboard, and registry pages.</p>
+        </article>
+        <article class="info-card">
+          <span class="card-icon">02</span>
+          <h3>Accessible navigation</h3>
+          <p>Keyboard skip links, semantic landmarks, focus states, and a mobile menu make the site easier to use.</p>
+        </article>
+        <article class="info-card">
+          <span class="card-icon">03</span>
+          <h3>Validated submissions</h3>
+          <p>Client-side checks catch empty fields, date mistakes, password mismatches, and invalid email formats early.</p>
+        </article>
+        <article class="info-card">
+          <span class="card-icon">04</span>
+          <h3>Safer PHP handlers</h3>
+          <p>Prepared statements, server-side validation, session regeneration, and password hashing reduce common risks.</p>
+        </article>
+        <article class="info-card">
+          <span class="card-icon">05</span>
+          <h3>Deployment shape</h3>
+          <p>Assets, PHP helpers, pages, and media now live in clearer folders so the project can grow.</p>
+        </article>
+      </div>
+    </section>
+
+    <section id="workflow" class="content-band">
+      <div class="section-kicker">Workflow</div>
+      <div class="timeline">
+        <div><strong>1</strong><span>Log in or create an account.</span></div>
+        <div><strong>2</strong><span>Search records from the dashboard.</span></div>
+        <div><strong>3</strong><span>Open the registry and submit validated course details.</span></div>
+        <div><strong>4</strong><span>Review server responses and keep records consistent.</span></div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div>
+      <a class="brand-mark" href="./grepMny.php"><span>GM</span><strong>GrepMny</strong></a>
+      <p>Built for clean registry operations and faster search workflows.</p>
+    </div>
+    <div class="footer-links">
+      <a href="../index.php">Login</a>
+      <a href="./signup.html">Register</a>
+      <a href="./data.html">Registry</a>
+    </div>
+  </footer>
+
+  <script src="../assets/js/app.js" defer></script>
+</body>
+</html>

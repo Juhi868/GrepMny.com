@@ -576,7 +576,7 @@ if ($role === 'student') {
         <strong>GrepMny</strong>
       </a>
       <div class="site-menu always-visible">
-        <a href="./grepMny.html">About Workspace</a>
+        <a href="./grepMny.php">About Workspace</a>
         <a href="./profile.php">View Profile</a>
         <a href="../scripts/php/logout.php" style="color:var(--danger)">Sign Out</a>
       </div>
@@ -1543,20 +1543,38 @@ if ($role === 'student') {
 
               <div class="dashboard-card" style="padding:1rem 1.15rem; margin-bottom:1rem; background:color-mix(in srgb, var(--primary) 5%, transparent);">
                 <h4 style="margin:0 0 0.75rem;">Time Configuration</h4>
-                <div class="form-row-grid assignment-form">
+                
+                <div class="form-row-grid assignment-form" style="margin-bottom:1rem;">
                   <label class="field compact">
-                    <span>Duration (minutes)</span>
+                    <span>Test Duration (minutes)</span>
                     <input type="number" name="duration_minutes" min="1" max="240" value="30" required>
+                  </label>
+                </div>
+
+                <p style="margin:0 0 0.65rem; font-weight:600; font-size:0.9rem; color:var(--muted);">Exam Start</p>
+                <div class="time-input-group" style="margin-bottom:1rem;">
+                  <label class="field compact">
+                    <span>Start Date</span>
+                    <input type="date" name="starts_at_date">
                   </label>
                   <label class="field compact">
                     <span>Start Time</span>
-                    <input type="datetime-local" name="starts_at">
+                    <input type="time" name="starts_at_time">
+                  </label>
+                </div>
+
+                <p style="margin:0 0 0.65rem; font-weight:600; font-size:0.9rem; color:var(--muted);">Exam End</p>
+                <div class="time-input-group" style="margin-bottom:0.75rem;">
+                  <label class="field compact">
+                    <span>End Date</span>
+                    <input type="date" name="ends_at_date">
                   </label>
                   <label class="field compact">
                     <span>End Time</span>
-                    <input type="datetime-local" name="ends_at">
+                    <input type="time" name="ends_at_time">
                   </label>
                 </div>
+
                 <p class="description" style="margin:0.75rem 0 0;">All students enrolled in the selected course will be assigned automatically.</p>
               </div>
 
@@ -1752,7 +1770,7 @@ if ($role === 'student') {
         <p>Dynamic Analytics & Role-Based Dashboard Portal.</p>
       </div>
       <div class="footer-links">
-        <a href="./grepMny.html">Home</a>
+        <a href="./grepMny.php">Home</a>
         <a href="../scripts/php/logout.php">Sign Out</a>
       </div>
     </div>

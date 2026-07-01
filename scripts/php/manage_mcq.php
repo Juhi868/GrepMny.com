@@ -93,8 +93,14 @@ if ($action === 'create_test' || $action === 'update_test') {
     $title = clean_string((string)($_POST['title'] ?? ''), 100);
     $description = clean_string((string)($_POST['description'] ?? ''), 1000);
 
-    $startsAt = trim((string)($_POST['starts_at'] ?? '')) ?: null;
-    $endsAt = trim((string)($_POST['ends_at'] ?? '')) ?: null;
+    $startsAtDate = trim((string)($_POST['starts_at_date'] ?? ''));
+    $startsAtTime = trim((string)($_POST['starts_at_time'] ?? ''));
+    $startsAt = ($startsAtDate && $startsAtTime) ? $startsAtDate . ' ' . $startsAtTime . ':00' : null;
+
+    $endsAtDate = trim((string)($_POST['ends_at_date'] ?? ''));
+    $endsAtTime = trim((string)($_POST['ends_at_time'] ?? ''));
+    $endsAt = ($endsAtDate && $endsAtTime) ? $endsAtDate . ' ' . $endsAtTime . ':00' : null;
+
     $duration = max(1, min(240, (int)($_POST['duration_minutes'] ?? 30)));
     $pass = max(0, min(100, (int)($_POST['pass_percentage'] ?? 40)));
 

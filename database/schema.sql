@@ -10,6 +10,7 @@ CREATE TABLE IF NOT EXISTS `login` (
   `passwd` VARCHAR(255) NOT NULL,
   `userid` VARCHAR(32) NOT NULL,
   `role` VARCHAR(20) NOT NULL DEFAULT 'student',
+  `has_logged_in` TINYINT(1) NOT NULL DEFAULT 0,
   `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   UNIQUE KEY `unique_login_email` (`email`),
